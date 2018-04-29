@@ -1,0 +1,7 @@
+*.rds
+/epilung/*
+/nsclc/*
+/clcgp/*
+*.key
+*.pem
+__pycache__/
