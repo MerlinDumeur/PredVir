@@ -1,4 +1,6 @@
 from sklearn.metrics import log_loss,mean_squared_error,mean_absolute_error
+import numpy as np
+import pandas as pd
 
 
 class Predicteur:
