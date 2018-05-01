@@ -43,7 +43,7 @@ class GeneralClassifier(Predicteur):
             Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
             Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
             self.objetSK.fit(Xtrain,Ytrain)
-            loss += log_loss(Ytest,self.objetSK.predict(Xtest))
+            loss += log_loss(Ytest,self.objetSK.predict_proba(Xtest))
 
         return loss / X.shape[0]
 
@@ -152,6 +152,33 @@ class LinearClassifieur(GeneralClassifier):
                 percent[index[0]] += 1 / n
         return percent,avg
 
+
+class EnsembleClassifieur(GeneralClassifier):
+
+    def __init__(self,objetSK,nmois,cv,X=None,Y=None,folder=None):
+
+        GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder)
+
+    def feature_relevance(self,N,threshold,**kwargs):
+
+        X = kwargs.get('X',self.X)
+        Y = kwargs.get('Y',self.Y)
+
+        index_df = np.append(X.columns.values,'logloss')
+        df = pd.DataFrame(columns=index_df)
+
+        for k in range(N):
+            kf = self.cv.split(X,Y)
+            for i in range(self.cv.get_n_splits()):
+                IndexTrain,IndexTest = next(kf)
+                Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
+                self.objetSK.fit(Xtrain,Ytrain)
+                loss = log_loss(Ytest,self.objetSK.predict_proba(Xtest))
+                row = np.append(self.objetSK.feature_importances_,loss)
+                S = pd.Series(row,index_df)
+                df.append(S,ignore_index=True)
+
+        return df
 
 class GeneralRegresser(Predicteur):
     
