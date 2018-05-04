@@ -159,7 +159,7 @@ class EnsembleClassifieur(GeneralClassifier):
 
         GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder)
 
-    def feature_relevance(self,N,threshold,**kwargs):
+    def feature_relevance(self,N=100,threshold=0,**kwargs):
 
         X = kwargs.get('X',self.X)
         Y = kwargs.get('Y',self.Y)
@@ -169,16 +169,19 @@ class EnsembleClassifieur(GeneralClassifier):
 
         for k in range(N):
             kf = self.cv.split(X,Y)
+#           print(f"{k}")
             for i in range(self.cv.get_n_splits()):
                 IndexTrain,IndexTest = next(kf)
                 Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
+                Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
                 self.objetSK.fit(Xtrain,Ytrain)
                 loss = log_loss(Ytest,self.objetSK.predict_proba(Xtest))
                 row = np.append(self.objetSK.feature_importances_,loss)
                 S = pd.Series(row,index_df)
-                df.append(S,ignore_index=True)
+                df = df.append(S,ignore_index=True)
 
         return df
+
 
 class GeneralRegresser(Predicteur):
     
@@ -312,3 +315,16 @@ def seuil(Array,S):
     f_s = lambda x: int(x > S)
     f = np.vectorize(f_s)
     return f(Array)
+
+
+class Resultat:
+
+    def __init__(self,data,parameters={},metrics={}):
+
+        self.data = data
+        self.parameters = parameters
+        self.metrics = metrics
+
+    def add_parameter(self,parameter_name):
+
+        self.parameters[parameter_name] = lambda x: getattr(x,parameter_name)
