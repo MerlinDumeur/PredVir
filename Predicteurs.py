@@ -19,6 +19,55 @@ class Predicteur:
         if ((Y is None) and (folder is not None)):
             self.load_Y(folder)
 
+    def feature_relevance(self,N=100,**kwargs):
+
+        X = kwargs.get('X',self.X)
+        Y = kwargs.get('Y',self.Y)
+        metrics = kwargs.get('metrics',self.metrics)
+        weights = kwargs.get('weights',self.weights)
+
+        index_metrics = np.array([*metrics])
+        index_weights = []
+        index_df = np.array([])
+
+        for w in weights:
+
+            prefix = w + '_'
+            index = prefix + X.columns.values
+            index_weights.append(index)
+            index_df = np.append(index_df, index)
+
+            index_df = np.append(index_metrics,index_weights)
+
+        df = pd.DataFrame(columns=index_df)
+
+        for k in range(N):
+
+            kf = self.cv.split(X,Y)
+
+            for i in range(self.cv.get_n_splits()):
+
+                IndexTrain,IndexTest = next(kf)
+                Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
+                Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
+                self.objetSK.fit(Xtrain,Ytrain)
+                
+                row = np.array([])
+
+                for m in metrics.itervalues():
+
+                    loss = m(Ytest,self.objetSK.predict_proba(Xtest))
+                    row = np.append(row,loss)
+
+                for w in weights:
+
+                    row = np.append(row, getattr(self.objetSK,w))
+
+                S = pd.Series(row,index_df)
+                df = df.append(S,ignore_index=True)
+
+        return Resultat(df,metrics=[*metrics],weights=dict(zip(weights,index_weights)))
+
     def set_objetSK(self,objetSK):
         self.objetSK = objetSK
 
@@ -119,55 +168,6 @@ class GeneralClassifier(Predicteur):
         
         return avg,var,skipped
 
-    def feature_relevance(self,N=100,**kwargs):
-
-        X = kwargs.get('X',self.X)
-        Y = kwargs.get('Y',self.Y)
-        metrics = kwargs.get('metrics',self.metrics)
-        weights = kwargs.get('weights',self.weights)
-
-        index_metrics = np.array([*metrics])
-        index_weights = []
-        index_df = np.array([])
-
-        for w in weights:
-
-            prefix = w + '_'
-            index = prefix + X.columns.values
-            index_weights.append(index)
-            index_df = np.append(index_df, index)
-
-            index_df = np.append(index_metrics,index_weights)
-
-        df = pd.DataFrame(columns=index_df)
-
-        for k in range(N):
-
-            kf = self.cv.split(X,Y)
-
-            for i in range(self.cv.get_n_splits()):
-
-                IndexTrain,IndexTest = next(kf)
-                Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
-                Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
-                self.objetSK.fit(Xtrain,Ytrain)
-                
-                row = np.array([])
-
-                for m in metrics.itervalues():
-
-                    loss = m(Ytest,self.objetSK.predict_proba(Xtest))
-                    row = np.append(row,loss)
-
-                for w in weights:
-
-                    row = np.append(row, getattr(self.objetSK,w))
-
-                S = pd.Series(row,index_df)
-                df = df.append(S,ignore_index=True)
-
-        return Resultat(df,metrics=[*metrics],weights=dict(zip(weights,index_weights)))
-
     def load_X(self,folder,**kwargs):
         filename = kwargs.get('filename',rf'X_classification-{self.nmois}.csv')
         self.X = pd.read_csv(folder + filename,index_col=0)
@@ -181,58 +181,58 @@ class LinearClassifieur(GeneralClassifier):
     
     def __init__(self,objetSK,nmois,cv,X=None,Y=None,folder=None):
         
-        GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder)
+        GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder,metrics={'logloss':log_loss},parameters=['coef_'])
     
-    def feature_relevance(self,N,**kwargs):
+    # def feature_relevance(self,N,**kwargs):
 
-        X = kwargs.get('X',self.X)
-        Y = kwargs.get('Y',self.Y)
+    #     X = kwargs.get('X',self.X)
+    #     Y = kwargs.get('Y',self.Y)
 
-        index_df = np.append(X.columns.values,'logloss')
-        df = pd.DataFrame(columns=index_df)
+    #     index_df = np.append(X.columns.values,'logloss')
+    #     df = pd.DataFrame(columns=index_df)
         
-        for k in range(N):
-            kf = self.cv.split(X,Y)
-            for i in range(self.cv.get_n_splits()):
-                IndexTrain,IndexTest = next(kf)
-                Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
-                Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
-                self.objetSK.fit(Xtrain,Ytrain)
-                loss = log_loss(Ytest,self.objetSK.predict_proba(Xtest))
-                row = np.append(self.objetSK.feature_importances_,loss)
-                S = pd.Series(row,index_df)
-                df = df.append(S,ignore_index=True)
+    #     for k in range(N):
+    #         kf = self.cv.split(X,Y)
+    #         for i in range(self.cv.get_n_splits()):
+    #             IndexTrain,IndexTest = next(kf)
+    #             Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
+    #             Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
+    #             self.objetSK.fit(Xtrain,Ytrain)
+    #             loss = log_loss(Ytest,self.objetSK.predict_proba(Xtest))
+    #             row = np.append(self.objetSK.feature_importances_,loss)
+    #             S = pd.Series(row,index_df)
+    #             df = df.append(S,ignore_index=True)
         
-        return Resultat(df,parameters={'feature_importances_':X.columns.values})
+    #     return Resultat(df,parameters={'feature_importances_':X.columns.values})
 
 
 class EnsembleClassifieur(GeneralClassifier):
 
     def __init__(self,objetSK,nmois,cv,X=None,Y=None,folder=None):
 
-        GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder)
+        GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder,metrics={'logloss':log_loss},parameters=['feature_importances_'])
 
-    def feature_relevance(self,N=100,threshold=0,**kwargs):
+    # def feature_relevance(self,N=100,threshold=0,**kwargs):
 
-        X = kwargs.get('X',self.X)
-        Y = kwargs.get('Y',self.Y)
+    #     X = kwargs.get('X',self.X)
+    #     Y = kwargs.get('Y',self.Y)
 
-        index_df = np.append(X.columns.values,'logloss')
-        df = pd.DataFrame(columns=index_df)
+    #     index_df = np.append(X.columns.values,'logloss')
+    #     df = pd.DataFrame(columns=index_df)
 
-        for k in range(N):
-            kf = self.cv.split(X,Y)
-            for i in range(self.cv.get_n_splits()):
-                IndexTrain,IndexTest = next(kf)
-                Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
-                Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
-                self.objetSK.fit(Xtrain,Ytrain)
-                loss = log_loss(Ytest,self.objetSK.predict_proba(Xtest))
-                row = np.append(self.objetSK.feature_importances_,loss)
-                S = pd.Series(row,index_df)
-                df = df.append(S,ignore_index=True)
+    #     for k in range(N):
+    #         kf = self.cv.split(X,Y)
+    #         for i in range(self.cv.get_n_splits()):
+    #             IndexTrain,IndexTest = next(kf)
+    #             Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
+    #             Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
+    #             self.objetSK.fit(Xtrain,Ytrain)
+    #             loss = log_loss(Ytest,self.objetSK.predict_proba(Xtest))
+    #             row = np.append(self.objetSK.feature_importances_,loss)
+    #             S = pd.Series(row,index_df)
+    #             df = df.append(S,ignore_index=True)
 
-        return df
+    #     return df
 
 
 class GeneralRegresser(Predicteur):
@@ -374,7 +374,6 @@ class Resultat:
     def __init__(self,data,stats=None,weights={},metrics=[]):
 
         self.data = data
-        self.stats = stats
         self.weights = weights
         self.metrics = metrics
 
@@ -413,24 +412,25 @@ class Resultat:
         row = [np.mean(self.data[i]) for i in self.index]
         S = pd.Series(row)
 
-        self.stats.loc['moyenne'] = S
+        self.data.loc['moyenne'] = S
 
     def stat_v(self,redo_m=False):
 
-        if (self.stats is None) or ('moyenne' not in self.stats.index.values) or redo_m:
+        if ('moyenne' not in self.data.index.values) or redo_m:
 
             self.stat_m()
 
-        row = [(np.mean(self.data[i] - self.stats.loc['moyenne'].values[j]))**2 for i in self.index]
+        row = [(np.mean(self.data[i] - self.data.loc['moyenne'].values[j]))**2 for i,j in enumerate(self.index)]
         S = pd.Series(row)
 
-        self.stats['moyenne'] = S
+        self.data.loc['variance'] = S
 
-    def get_percentage(self,weight,threshold=0):
+    def stat_percentage(self,threshold=0):
 
-        if weight in self.weights.keys():
+        row = [np.greater(self.data[i],threshold) if (i not in self.metrics) else None for i in self.index]
+        S = pd.Series(row)
 
-            
+        self.data.loc['percentage'] = S
 
 #   def add_rows(self):
 
