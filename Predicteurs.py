@@ -132,14 +132,14 @@ class LinearClassifieur(GeneralClassifier):
         
         GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder)
     
-    def feature_relevance(self,N,threshold,**kwargs):
+    def feature_relevance(self,N,**kwargs):
 
         X = kwargs.get('X',self.X)
         Y = kwargs.get('Y',self.Y)
+
+        index_df = np.append(X.columns.values,'logloss')
+        df = pd.DataFrame(columns=index_df)
         
-        percent,avg = np.zeros(X.shape[1]),np.zeros(X.shape[1])
-        threshold = threshold * np.ones(X.shape[1])
-        n = self.cv.get_n_splits() * N
         for k in range(N):
             kf = self.cv.split(X,Y)
             for i in range(self.cv.get_n_splits()):
@@ -147,10 +147,13 @@ class LinearClassifieur(GeneralClassifier):
                 Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
                 self.objetSK.fit(Xtrain,Ytrain)
                 avg = avg + self.objetSK.coef_ / n
+                loss = log_loss(Ytest,self.objetSK.predict_proba(Xtest))
                 index = np.greater(self.objetSK.coef_,threshold)
-#               print(index)
-                percent[index[0]] += 1 / n
-        return percent,avg
+                row = np.append(self.objetSK.feature_importances_,loss)
+                S = pd.Series(row,index_df)
+                df = df.append(S,ignore_index=True)
+        
+        return df
 
 
 class EnsembleClassifieur(GeneralClassifier):
@@ -169,7 +172,6 @@ class EnsembleClassifieur(GeneralClassifier):
 
         for k in range(N):
             kf = self.cv.split(X,Y)
-#           print(f"{k}")
             for i in range(self.cv.get_n_splits()):
                 IndexTrain,IndexTest = next(kf)
                 Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
@@ -319,12 +321,38 @@ def seuil(Array,S):
 
 class Resultat:
 
-    def __init__(self,data,parameters={},metrics={}):
+    def __init__(self,data,parameters={},metrics=[]):
 
         self.data = data
         self.parameters = parameters
         self.metrics = metrics
 
+        index = parameters.keys()+metrics
+        self.moyennes = dict.fromkeys(index,None)
+        self.variances = dict.fromkeys(index,None)
+
+    def calculate_m(self,parameters_list,metrics_list):
+
+        for l in parameters_list:
+
+            for p in parameters_list: 
+
+                self.moyennes[p] = np.mean(self.data[p].values)
+
+    def calculate_v(self,stat_list):
+
+        for l in stat_list:
+
+            if self.moyennes[l] is None:
+
+                calculate_m(self,[l])
+
+            self.variances[l] = np.mean((self.data[l].values - self.moyennes[l])**2)
+
     def add_parameter(self,parameter_name):
 
         self.parameters[parameter_name] = lambda x: getattr(x,parameter_name)
+
+    def add_metric(self,name,metric):
+
+        self.metrics[name] = metric
