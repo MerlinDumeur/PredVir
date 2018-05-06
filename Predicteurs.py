@@ -5,12 +5,14 @@ import pandas as pd
 
 class Predicteur:
 
-    def __init__(self, objetSK, cv, X=None, Y=None, folder=None):
+    def __init__(self, objetSK, cv, X=None, Y=None, folder=None, metrics={}, weights=[]):
 
         self.cv = cv
         self.objetSK = objetSK
         self.X = X
         self.Y = Y
+        self.metrics = metrics
+        self.weights = weights
 
         if ((X is None) and (folder is not None)):
             self.load_X(folder)
@@ -26,10 +28,10 @@ class Predicteur:
 
 class GeneralClassifier(Predicteur):
 
-    def __init__(self, objetSK, nmois, cv, X=None, Y=None, folder=None):
+    def __init__(self, objetSK, nmois, cv, X=None, Y=None, folder=None, metrics={}, weights=[]):
 
         self.nmois = nmois
-        Predicteur.__init__(self, objetSK, cv, X, Y, folder)
+        Predicteur.__init__(self, objetSK, cv, X, Y, folder,metrics,weights)
 
     def logloss(self,**kwargs):
 
@@ -117,6 +119,55 @@ class GeneralClassifier(Predicteur):
         
         return avg,var,skipped
 
+    def feature_relevance(self,N=100,**kwargs):
+
+        X = kwargs.get('X',self.X)
+        Y = kwargs.get('Y',self.Y)
+        metrics = kwargs.get('metrics',self.metrics)
+        weights = kwargs.get('weights',self.weights)
+
+        index_metrics = np.array([*metrics])
+        index_weights = []
+        index_df = np.array([])
+
+        for w in weights:
+
+            prefix = w + '_'
+            index = prefix + X.columns.values
+            index_weights.append(index)
+            index_df = np.append(index_df, index)
+
+            index_df = np.append(index_metrics,index_weights)
+
+        df = pd.DataFrame(columns=index_df)
+
+        for k in range(N):
+
+            kf = self.cv.split(X,Y)
+
+            for i in range(self.cv.get_n_splits()):
+
+                IndexTrain,IndexTest = next(kf)
+                Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
+                Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
+                self.objetSK.fit(Xtrain,Ytrain)
+                
+                row = np.array([])
+
+                for m in metrics.itervalues():
+
+                    loss = m(Ytest,self.objetSK.predict_proba(Xtest))
+                    row = np.append(row,loss)
+
+                for w in weights:
+
+                    row = np.append(row, getattr(self.objetSK,w))
+
+                S = pd.Series(row,index_df)
+                df = df.append(S,ignore_index=True)
+
+        return Resultat(df,metrics=[*metrics],weights=dict(zip(weights,index_weights)))
+
     def load_X(self,folder,**kwargs):
         filename = kwargs.get('filename',rf'X_classification-{self.nmois}.csv')
         self.X = pd.read_csv(folder + filename,index_col=0)
@@ -145,15 +196,14 @@ class LinearClassifieur(GeneralClassifier):
             for i in range(self.cv.get_n_splits()):
                 IndexTrain,IndexTest = next(kf)
                 Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
+                Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
                 self.objetSK.fit(Xtrain,Ytrain)
-                avg = avg + self.objetSK.coef_ / n
                 loss = log_loss(Ytest,self.objetSK.predict_proba(Xtest))
-                index = np.greater(self.objetSK.coef_,threshold)
                 row = np.append(self.objetSK.feature_importances_,loss)
                 S = pd.Series(row,index_df)
                 df = df.append(S,ignore_index=True)
         
-        return df
+        return Resultat(df,parameters={'feature_importances_':X.columns.values})
 
 
 class EnsembleClassifieur(GeneralClassifier):
@@ -321,38 +371,73 @@ def seuil(Array,S):
 
 class Resultat:
 
-    def __init__(self,data,parameters={},metrics=[]):
+    def __init__(self,data,stats=None,weights={},metrics=[]):
 
         self.data = data
-        self.parameters = parameters
+        self.stats = stats
+        self.weights = weights
         self.metrics = metrics
 
-        index = parameters.keys()+metrics
+        index = weights.keys() + metrics
         self.moyennes = dict.fromkeys(index,None)
         self.variances = dict.fromkeys(index,None)
 
-    def calculate_m(self,parameters_list,metrics_list):
+        self.index = data.columns.values
 
-        for l in parameters_list:
+    def calculate_m(self,mlist):
 
-            for p in parameters_list: 
+        for m in mlist:
 
-                self.moyennes[p] = np.mean(self.data[p].values)
+            if m in self.metrics:
 
-    def calculate_v(self,stat_list):
+                self.moyennes[m] = np.mean(self.data[m].values)
 
-        for l in stat_list:
+    def calculate_v(self,mlist):
 
-            if self.moyennes[l] is None:
+        for m in mlist:
 
-                calculate_m(self,[l])
+            if m in self.metrics:
 
-            self.variances[l] = np.mean((self.data[l].values - self.moyennes[l])**2)
+                if self.moyennes[m] is None:
 
-    def add_parameter(self,parameter_name):
+                    self.calculate_m(self,[m])
 
-        self.parameters[parameter_name] = lambda x: getattr(x,parameter_name)
+                self.variances[m] = np.mean((self.data[m].values - self.moyennes[m])**2)
 
-    def add_metric(self,name,metric):
+    def stat_m(self):
 
-        self.metrics[name] = metric
+        if self.stats is None:
+
+            self.stats = pd.DataFrame(columns=self.index)
+
+        row = [np.mean(self.data[i]) for i in self.index]
+        S = pd.Series(row)
+
+        self.stats.loc['moyenne'] = S
+
+    def stat_v(self,redo_m=False):
+
+        if (self.stats is None) or ('moyenne' not in self.stats.index.values) or redo_m:
+
+            self.stat_m()
+
+        row = [(np.mean(self.data[i] - self.stats.loc['moyenne'].values[j]))**2 for i in self.index]
+        S = pd.Series(row)
+
+        self.stats['moyenne'] = S
+
+    def get_percentage(self,weight,threshold=0):
+
+        if weight in self.weights.keys():
+
+            
+
+#   def add_rows(self):
+
+    def add_parameter(self,weight_name,weight_list):
+
+        self.weights[weight_name] = weight_list
+
+    def add_metric(self,metric):
+
+        self.metrics.append(metric)
