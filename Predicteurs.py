@@ -428,7 +428,7 @@ class Resultat:
         self.weights = weights
         self.metrics = metrics
 
-        index = weights.keys() + metrics
+        index = [*weights.keys()] + metrics
         self.moyennes = dict.fromkeys(index,None)
         self.variances = dict.fromkeys(index,None)
 
