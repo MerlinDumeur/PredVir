@@ -1,6 +1,8 @@
 from sklearn.metrics import log_loss,mean_squared_error,mean_absolute_error
 import numpy as np
 import pandas as pd
+import glob
+import re
 
 
 class Predicteur:
@@ -422,17 +424,18 @@ def seuil(Array,S):
 
 class Resultat:
 
-    def __init__(self,data,stats=None,weights={},metrics=[]):
+    def __init__(self,data,stats=None,weights={},metrics=[],info={}):
 
         self.data = data
         self.weights = weights
         self.metrics = metrics
+        self.info = info
 
         index = [*weights.keys()] + metrics
         self.moyennes = dict.fromkeys(index,None)
         self.variances = dict.fromkeys(index,None)
 
-        self.index = data.columns.values
+        self.index_col = data.columns.values
 
     def calculate_m(self,mlist):
 
@@ -456,32 +459,60 @@ class Resultat:
 
     def stat_m(self):
 
+        index_row = [True if type(i) is int else False for i in self.data.index.values]
+
         if self.stats is None:
 
-            self.stats = pd.DataFrame(columns=self.index)
+            self.stats = pd.DataFrame(columns=self.index_col)
 
-        row = [np.mean(self.data[i]) for i in self.index]
+        row = [np.mean(self.data[i].loc[index_row]) for i in self.index_col]
         S = pd.Series(row)
 
         self.data.loc['moyenne'] = S
 
     def stat_v(self,redo_m=False):
 
+        index_row = [True if type(i) is int else False for i in self.data.index.values]
+
         if ('moyenne' not in self.data.index.values) or redo_m:
 
             self.stat_m()
 
-        row = [(np.mean(self.data[i] - self.data.loc['moyenne'].values[j]))**2 for i,j in enumerate(self.index)]
+        row = [(np.mean(self.data[i].loc[index_row] - self.data.loc['moyenne'].values[j]))**2 for i,j in enumerate(self.index_col)]
         S = pd.Series(row)
 
         self.data.loc['variance'] = S
 
     def stat_percentage(self,threshold=0):
 
-        row = [np.greater(self.data[i],threshold) if (i not in self.metrics) else None for i in self.index]
-        S = pd.Series(row)
+        index_row = [True if type(i) is int else False for i in self.data.index.values]
+        row = np.zeros(len(self.index_col))
+        compare = threshold * np.ones(len(self.data[self.index[0].loc[index_row]]))
 
+        row = [np.mean(np.greater(self.data[i].loc[index_row].values,compare) + 0) for i in self.index]
+
+        S = pd.Series(row)
         self.data.loc['percentage'] = S
+
+    def save(self,replace=False,**kwargs):
+
+        fname = rf'{self.info["base"]}/Stat'
+        pattern = '.*_(\d*?).csv'
+
+        for k,v in self.info.items():
+            fname = fname + f"_{v}"
+
+        fnamelist = glob.glob(fname + '_*.csv')
+
+        values = [int(m[0]) for m in [re.findall(pattern,f) for f in fnamelist]]
+
+        if replace:
+            number = kwargs.get('number',max(values))
+        else:
+            number = kwargs.get('number',max(values) + 1)
+
+        filename = kwargs.get('filename',fname + f'_{number}.csv')
+        self.data.to_csv(filename)
 
 #   def add_rows(self):
 
