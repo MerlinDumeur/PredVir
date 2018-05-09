@@ -68,7 +68,7 @@ class GeneralClassifier(Predicteur):
 
             for k,m in metrics.items():
 
-                loss = m(Ytest,self.objetSK.predict_proba(Xtest))
+                loss = m(Ytest,self.objetSK.predict_proba(Xtest)) / Xtest.shape[0]
                 row = np.append(row,loss)
 
                 row = np.array([m(Ytest,self.objetSK.predict_proba(Xtest)) for m in metrics.values()])
@@ -170,7 +170,7 @@ class GeneralRegresser(Predicteur):
 
                 for k,m in metrics.items():
 
-                    loss = m(Ytest,self.objetSK.predict(Xtest))
+                    loss = m(Ytest,self.objetSK.predict(Xtest))/Xtest.shape[0]
                     row = np.append(row,loss)
 
                 for w in weights:
@@ -283,7 +283,7 @@ class Resultat:
 
     def stat_m(self):
 
-        index_row = [True if type(i) is int else False for i in self.data.index.values]
+        index_row = [CastableInt(i) for i in self.data.index.values]
 
         row = [np.mean(self.data[i].loc[index_row]) for i in self.index_col]
 
@@ -291,21 +291,21 @@ class Resultat:
 
     def stat_v(self,redo_m=False):
 
-        index_row = [True if type(i) is int else False for i in self.data.index.values]
+        index_row = [CastableInt(i) for i in self.data.index.values]
 
         if ('moyenne' not in self.data.index.values) or redo_m:
 
             self.stat_m()
 
-        row = [(np.mean(self.data[i].loc[index_row] - self.data.loc['moyenne'].values[j]))**2 for i,j in enumerate(self.index_col)]
+        row = [(np.mean(self.data[j].loc[index_row] - self.data.loc['moyenne'].values[i]))**2 for i,j in enumerate(self.index_col)]
 
         self.data.loc['variance'] = row
 
     def stat_percentage(self,threshold=0):
 
-        index_row = [True if type(i) is int else False for i in self.data.index.values]
+        index_row = [CastableInt(i) for i in self.data.index.values]
         row = np.zeros(len(self.index_col))
-        compare = threshold * np.ones(len(self.data[self.index[0].loc[index_row]]))
+        compare = threshold * np.ones(len(self.data.loc[index_row].index))
 
         row = [np.mean(np.greater(self.data[i].loc[index_row].values,compare) + 0) for i in self.index_col]
 
@@ -368,6 +368,15 @@ def load_resultat(info={},filename="",**kwargs):
 
             f = f + f'_{info["id"]}.csv'
 
-            data = pd.read_csv(f,index_col=0,header=[0,1])
+            data = pd.read_csv(f,index_col=0,header=[0,1],dtype={0:object})
 
         return Resultat(data,info=info)
+
+
+def CastableInt(s):
+
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
