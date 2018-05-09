@@ -44,7 +44,7 @@ class GeneralClassifier(Predicteur):
         self.nmois = nmois
         Predicteur.__init__(self, objetSK, cv, X, Y, folder,metrics,weights)
 
-    def feature_relevance(self,N=100,**kwargs):
+    def feature_relevance(self,**kwargs):
 
         X = kwargs.get('X',self.X)
         Y = kwargs.get('Y',self.Y)
@@ -53,28 +53,23 @@ class GeneralClassifier(Predicteur):
         info = kwargs.get('info',{'base':self.folder,'predicteur':PREDICTEUR_DICT[type(self.objetSK).__name__],'predicteur_type':'C','nmois':self.nmois})
 
         index_weights = pd.MultiIndex.from_product([weights,X.columns.values],names=['weight','probe'])
-        index_metrics = pd.MultiIndex.from_product([['metrics'],[*metrics.values()]],names=['','probe'])
+        index_metrics = pd.MultiIndex.from_product([['metrics'],[*metrics.keys()]],names=['','probe'])
         index_df = index_metrics.append(index_weights)
 
         df = pd.DataFrame(columns=index_df)
 
-        for k in range(N):
+        for IndexTrain,IndexTest in self.cv.split(X,Y):
 
-            kf = self.cv.split(X,Y)
+            Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
+            Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
+            self.objetSK.fit(Xtrain,Ytrain)
 
-            for i in range(self.cv.get_n_splits()):
+            row = np.array([])
 
-                IndexTrain,IndexTest = next(kf)
-                Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
-                Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
-                self.objetSK.fit(Xtrain,Ytrain)
-                
-                row = np.array([])
+            for k,m in metrics.items():
 
-                for k,m in metrics.items():
-
-                    loss = m(Ytest,self.objetSK.predict_proba(Xtest))
-                    row = np.append(row,loss)
+                loss = m(Ytest,self.objetSK.predict_proba(Xtest))
+                row = np.append(row,loss)
 
                 row = np.array([m(Ytest,self.objetSK.predict_proba(Xtest)) for m in metrics.values()])
 
@@ -82,8 +77,8 @@ class GeneralClassifier(Predicteur):
 
                     row = np.append(row, getattr(self.objetSK,w))
 
-                S = pd.Series(row,index_df)
-                df = df.append(S,ignore_index=True)
+                    S = pd.Series(row,index_df)
+                    df = df.append(S,ignore_index=True)
 
         return Resultat(df,info=info)
 
@@ -96,20 +91,20 @@ class GeneralClassifier(Predicteur):
 
         X = kwargs.get('X',self.X)
         Y = kwargs.get('Y',self.Y)
-        N = kwargs.get('N',100)
-        skipped = 0
         avg,var = [],[]
         for i,k in enumerate(grid):
             Index_k = np.nonzero(seuil(percentage,k))[0]
             Xk = X.iloc[:,Index_k]
             if Xk.shape[1] == 0:
-                skipped = len(grid) - i
+                grid = grid[:i - len(grid)]
                 break
-            a,v = self.stat_logloss(N=N,X=Xk,Y=Y)
-            avg.append(a)
-            var.append(v)
-        
-        return avg,var,skipped
+            Res = self.feature_relevance(X=Xk,Y=Y)
+            Res.calculate_v(self.metrics)
+            avg.append(Res.moyennes[self.metrics[0]])
+            var.append(Res.variances[self.metrics[0]])
+#           a,v = self.stat_logloss(N=N,X=Xk,Y=Y)
+
+        return avg,var,grid
 
     def load_X(self,folder,**kwargs):
         filename = kwargs.get('filename',rf'X_classification-{self.nmois}.csv')
@@ -291,8 +286,8 @@ class Resultat:
         index_row = [True if type(i) is int else False for i in self.data.index.values]
 
         row = [np.mean(self.data[i].loc[index_row]) for i in self.index_col]
-        S = pd.Series(row)
-        self.data.loc['moyenne'] = S
+
+        self.data.loc['moyenne'] = row
 
     def stat_v(self,redo_m=False):
 
@@ -303,9 +298,8 @@ class Resultat:
             self.stat_m()
 
         row = [(np.mean(self.data[i].loc[index_row] - self.data.loc['moyenne'].values[j]))**2 for i,j in enumerate(self.index_col)]
-        S = pd.Series(row)
 
-        self.data.loc['variance'] = S
+        self.data.loc['variance'] = row
 
     def stat_percentage(self,threshold=0):
 
@@ -313,7 +307,7 @@ class Resultat:
         row = np.zeros(len(self.index_col))
         compare = threshold * np.ones(len(self.data[self.index[0].loc[index_row]]))
 
-        row = [np.mean(np.greater(self.data[i].loc[index_row].values,compare) + 0) for i in self.index]
+        row = [np.mean(np.greater(self.data[i].loc[index_row].values,compare) + 0) for i in self.index_col]
 
         S = pd.Series(row)
         self.data.loc['percentage'] = S
@@ -331,11 +325,11 @@ class Resultat:
 
         values = [int(m[0]) for m in [re.findall(pattern,f) for f in fnamelist]]
 
-        number = kwargs.get('number',self.info['id'])
-        
-        if number in values and (not replace):
+        if not replace:
             number = max(values) + 1
-
+        else:
+            number = kwargs.get('number',self.info['id'])
+        
         filename = kwargs.get('filename',fname + f'_{number}.csv')
         self.data.to_csv(filename)
 
