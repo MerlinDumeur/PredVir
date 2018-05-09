@@ -50,6 +50,7 @@ class GeneralClassifier(Predicteur):
         Y = kwargs.get('Y',self.Y)
         metrics = kwargs.get('metrics',self.metrics)
         weights = kwargs.get('weights',self.weights)
+        info = kwargs.get('info',{'base':self.folder,'predicteur':PREDICTEUR_DICT[type(self.objetSK).__name__],'predicteur_type':'C','nmois':self.nmois})
 
         index_weights = pd.MultiIndex.from_product([weights,X.columns.values],names=['weight','probe'])
         index_metrics = pd.MultiIndex.from_product([['metrics'],[*metrics.values()]],names=['','probe'])
@@ -75,6 +76,8 @@ class GeneralClassifier(Predicteur):
                     loss = m(Ytest,self.objetSK.predict_proba(Xtest))
                     row = np.append(row,loss)
 
+                row = np.array([m(Ytest,self.objetSK.predict_proba(Xtest)) for m in metrics.values()])
+
                 for w in weights:
 
                     row = np.append(row, getattr(self.objetSK,w))
@@ -82,69 +85,7 @@ class GeneralClassifier(Predicteur):
                 S = pd.Series(row,index_df)
                 df = df.append(S,ignore_index=True)
 
-        return Resultat(df,info={'base':self.folder,'predicteur':PREDICTEUR_DICT[type(self.objetSK).__name__],'predicteur_type':'C','nmois':self.nmois})
-
-    # def logloss(self,**kwargs):
-
-    #     X = kwargs.get('X',self.X)
-    #     Y = kwargs.get('Y',self.Y)
-    #     kf = self.cv.split(X,Y)
-    #     loss = 0
-
-    #     for i in range(self.cv.get_n_splits()):
-    #         IndexTrain,IndexTest = next(kf)
-    #         Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
-    #         Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
-    #         self.objetSK.fit(Xtrain,Ytrain)
-    #         loss += log_loss(Ytest,self.objetSK.predict_proba(Xtest))
-
-    #     return loss / X.shape[0]
-
-    # def stat_logloss(self,N=100,**kwargs):
-
-    #     X = kwargs.get('X',self.X)
-    #     Y = kwargs.get('Y',self.Y)
-    #     l = []
-
-    #     for i in range(N):
-    #         l.append(self.logloss(X=X,Y=Y))
-        
-    #     moyenne = np.mean(l)
-    #     variance = np.sum((l - moyenne)**2) / (len(l) - 1)
-        
-    #     return moyenne,variance
-
-    # def score(self,**kwargs):
-        
-    #     X = kwargs.get('X',self.X)
-    #     Y = kwargs.get('Y',self.Y)
-        
-    #     kf = self.cv.split(X,Y)
-    #     score = 0
-        
-    #     for i in range(self.cv.get_n_splits()):
-    #         IndexTrain,IndexTest = next(kf)
-    #         Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
-    #         Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
-    #         self.objetSK.fit(Xtrain,Ytrain)
-    #         score += self.objetSK.score(Xtest,Ytest)
-        
-    #     return score / self.cv.get_n_splits()
-
-    # def stat_score(self,N=100,**kwargs):
-
-    #     X = kwargs.get('X',self.X)
-    #     Y = kwargs.get('Y',self.Y)
-        
-    #     l = []
-
-    #     for i in range(N):
-    #         l.append(self.score(X=X,Y=Y))
-        
-    #     moyenne = np.mean(l)
-    #     variance = np.mean((l - moyenne)**2)
-        
-    #     return moyenne,variance
+        return Resultat(df,info=info)
 
     def grid_search(self,**kwargs):
 
@@ -184,59 +125,19 @@ class LinearClassifieur(GeneralClassifier):
     def __init__(self,objetSK,nmois,cv,X=None,Y=None,folder=None,**kwargs):
 
         weights = kwargs.get('weights',['coef_'])
+        metrics = kwargs.get('metrics',{'logloss':log_loss})
         
-        GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder,weights=weights)
-    
-    # def feature_relevance(self,N,**kwargs):
-
-    #     X = kwargs.get('X',self.X)
-    #     Y = kwargs.get('Y',self.Y)
-
-    #     index_df = np.append(X.columns.values,'logloss')
-    #     df = pd.DataFrame(columns=index_df)
-        
-    #     for k in range(N):
-    #         kf = self.cv.split(X,Y)
-    #         for i in range(self.cv.get_n_splits()):
-    #             IndexTrain,IndexTest = next(kf)
-    #             Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
-    #             Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
-    #             self.objetSK.fit(Xtrain,Ytrain)
-    #             loss = log_loss(Ytest,self.objetSK.predict_proba(Xtest))
-    #             row = np.append(self.objetSK.feature_importances_,loss)
-    #             S = pd.Series(row,index_df)
-    #             df = df.append(S,ignore_index=True)
-        
-    #     return Resultat(df,parameters={'feature_importances_':X.columns.values})
+        GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder,weights=weights,metrics=metrics)
 
 
 class EnsembleClassifieur(GeneralClassifier):
 
-    def __init__(self,objetSK,nmois,cv,X=None,Y=None,folder=None):
+    def __init__(self,objetSK,nmois,cv,X=None,Y=None,folder=None,**kwargs):
 
-        GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder,metrics={'logloss':log_loss},weights=['feature_importances_'])
+        weights = kwargs.get('weights',['feature_importances_'])
+        metrics = kwargs.get('metrics',{'logloss':log_loss})
 
-    # def feature_relevance(self,N=100,threshold=0,**kwargs):
-
-    #     X = kwargs.get('X',self.X)
-    #     Y = kwargs.get('Y',self.Y)
-
-    #     index_df = np.append(X.columns.values,'logloss')
-    #     df = pd.DataFrame(columns=index_df)
-
-    #     for k in range(N):
-    #         kf = self.cv.split(X,Y)
-    #         for i in range(self.cv.get_n_splits()):
-    #             IndexTrain,IndexTest = next(kf)
-    #             Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
-    #             Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
-    #             self.objetSK.fit(Xtrain,Ytrain)
-    #             loss = log_loss(Ytest,self.objetSK.predict_proba(Xtest))
-    #             row = np.append(self.objetSK.feature_importances_,loss)
-    #             S = pd.Series(row,index_df)
-    #             df = df.append(S,ignore_index=True)
-
-    #     return df
+        GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder,metrics=metrics,weights=weights)
 
 
 class GeneralRegresser(Predicteur):
@@ -251,19 +152,11 @@ class GeneralRegresser(Predicteur):
         Y = kwargs.get('Y',self.Y)
         metrics = kwargs.get('metrics',self.metrics)
         weights = kwargs.get('weights',self.weights)
+        info = kwargs.get('info',{'base':self.folder,'predicteur':PREDICTEUR_DICT[type(self.objetSK).__name__],'predicteur_type':'R'})
 
-        index_metrics = np.array([*metrics])
-        index_weights = []
-        index_df = np.array([])
-
-        for w in weights:
-
-            prefix = w + '_'
-            index = prefix + X.columns.values
-            index_weights.append(index)
-            index_df = np.append(index_df, index)
-
-        index_df = np.append(index_metrics,index_weights)
+        index_weights = pd.MultiIndex.from_product([weights,X.columns.values],names=['weight','probe'])
+        index_metrics = pd.MultiIndex.from_product([['metrics'],[*metrics.values()]],names=['','probe'])
+        index_df = index_metrics.append(index_weights)
 
         df = pd.DataFrame(columns=index_df)
 
@@ -293,70 +186,6 @@ class GeneralRegresser(Predicteur):
                 df = df.append(S,ignore_index=True)
 
         return Resultat(df,metrics=[*metrics],weights=dict(zip(weights,index_weights)))
-
-    # def erreur_quadratique_moyenne(self,**kwargs):
-        
-    #     X = kwargs.get('X',self.X)
-    #     Y = kwargs.get('Y',self.Y)
-        
-    #     kf = self.cv.split(X,Y)
-    #     loss = 0
-        
-    #     for i in range(self.cv.get_n_splits()):
-            
-    #         IndexTrain,IndexTest = next(kf)
-    #         Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
-    #         Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
-    #         self.objetSK.fit(Xtrain,Ytrain)
-    #         loss += mean_squared_error(Ytest,self.objetSK.predict(Xtest))
-        
-    #     return loss / X.shape[0]
-    
-    # def stat_erreur_quadratique_moyenne(self,N=100,**kwargs):
-        
-    #     X = kwargs.get('X',self.X)
-    #     Y = kwargs.get('Y',self.Y)
-    #     l = []
-        
-    #     for i in range(N):
-    #         l.append(self.erreur_quadratique_moyenne(X=X,Y=Y))
-        
-    #     moyenne = np.mean(l)
-    #     variance = np.mean((l - moyenne)**2)
-        
-    #     return moyenne,variance
-        
-    # def erreur_moyenne_absolue(self,**kwargs):
-        
-    #     X = kwargs.get('X',self.X)
-    #     Y = kwargs.get('Y',self.Y)
-        
-    #     kf = self.cv.split(X,Y)
-    #     loss = 0
-        
-    #     for i in range(self.cv.get_n_splits()):
-            
-    #         IndexTrain,IndexTest = next(kf)
-    #         Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
-    #         Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
-    #         self.objetSK.fit(Xtrain,Ytrain)
-    #         loss += mean_absolute_error(Ytest,self.objetSK.predict(Xtest))
-        
-    #     return loss / X.shape[0]
-    
-    # def stat_erreur_moyenne_absolue(self,N=100,**kwargs):
-        
-    #     X = kwargs.get('X',self.X)
-    #     Y = kwargs.get('Y',self.Y)
-    #     l = []
-        
-    #     for i in range(N):
-    #         l.append(self.erreur_moyenne_absolue(X=X,Y=Y))
-        
-    #     moyenne = np.mean(l)
-    #     variance = np.mean((l - moyenne)**2)
-        
-    #     return moyenne,variance
     
     def stat_seuil(self,grid,percentage,**kwargs):
 
