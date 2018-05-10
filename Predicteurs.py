@@ -91,17 +91,24 @@ class GeneralClassifier(Predicteur):
 
         X = kwargs.get('X',self.X)
         Y = kwargs.get('Y',self.Y)
-        avg,var = [],[]
+        avg,var = dict.fromkeys(self.metrics.keys(),[]),dict.fromkeys(self.metrics.keys(),[])
         for i,k in enumerate(grid):
-            Index_k = np.nonzero(seuil(percentage,k))[0]
-            Xk = X.iloc[:,Index_k]
+            compare = k * np.ones(len(percentage))
+            index_percent = np.greater(percentage,compare)
+            I = percentage.loc[index_percent].index
+            Xk = X[I]
             if Xk.shape[1] == 0:
                 grid = grid[:i - len(grid)]
                 break
             Res = self.feature_relevance(X=Xk,Y=Y)
             Res.calculate_v(self.metrics)
-            avg.append(Res.moyennes[self.metrics[0]])
-            var.append(Res.variances[self.metrics[0]])
+
+            for (k,a),(k,s) in zip(avg.items(),var.items()):
+
+                avg[k] = a.append(Res.moyennes[k])
+                var[k] = s.append(Res.variances[k])
+            
+#           var.append(Res.variances[self.metrics[0]])
 #           a,v = self.stat_logloss(N=N,X=Xk,Y=Y)
 
         return avg,var,grid
@@ -170,7 +177,7 @@ class GeneralRegresser(Predicteur):
 
                 for k,m in metrics.items():
 
-                    loss = m(Ytest,self.objetSK.predict(Xtest))/Xtest.shape[0]
+                    loss = m(Ytest,self.objetSK.predict(Xtest)) / Xtest.shape[0]
                     row = np.append(row,loss)
 
                 for w in weights:
@@ -180,7 +187,7 @@ class GeneralRegresser(Predicteur):
                 S = pd.Series(row,index_df)
                 df = df.append(S,ignore_index=True)
 
-        return Resultat(df,metrics=[*metrics],weights=dict(zip(weights,index_weights)))
+        return Resultat(df,info=info)
     
     def stat_seuil(self,grid,percentage,**kwargs):
 
@@ -269,13 +276,17 @@ class Resultat:
 
         #         self.moyennes[m] = np.mean(self.data['metrics',m])
 
-        self.moyennes.update({m:np.mean(self.data['metrics'],m) for m in mlist if m in self.data['metrics'].columns})
+        index_row = [CastableInt(i) for i in self.data.index.values]
+
+        self.moyennes.update({m:np.mean(self.data['metrics',m].loc[index_row]) for m in mlist if m in self.data['metrics'].columns})
 
     def calculate_v(self,mlist):
 
+        index_row = [CastableInt(i) for i in self.data.index.values]
+
         self.calculate_m([m for m in mlist if (m in self.index_metrics) and (self.moyennes[m] is None)])
 
-        self.variances.update({m: np.mean((self.data[m].values - self.moyennes[m])**2) for m in mlist if m in self.index_metrics})
+        self.variances.update({m: np.mean((self.data['metrics',m].loc[index_row].values - self.moyennes[m])**2) for m in mlist if m in self.data['metrics'].columns})
 
         # for m in [m for m in mlist if m in self.index_metrics]:
 
@@ -309,8 +320,7 @@ class Resultat:
 
         row = [np.mean(np.greater(self.data[i].loc[index_row].values,compare) + 0) for i in self.index_col]
 
-        S = pd.Series(row)
-        self.data.loc['percentage'] = S
+        self.data.loc['percentage'] = row
 
     def save(self,replace=False,**kwargs):
 
@@ -328,7 +338,7 @@ class Resultat:
         if not replace:
             number = max(values) + 1
         else:
-            number = kwargs.get('number',self.info['id'])
+            number = kwargs.get('number',max(values))
         
         filename = kwargs.get('filename',fname + f'_{number}.csv')
         self.data.to_csv(filename)
