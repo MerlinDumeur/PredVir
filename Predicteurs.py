@@ -316,9 +316,12 @@ class Resultat:
 
         index_row = [CastableInt(i) for i in self.data.index.values]
         row = np.zeros(len(self.index_col))
-        compare = threshold * np.ones(len(self.data.loc[index_row].index))
 
-        row = [np.mean(np.greater(self.data[i].loc[index_row].values,compare) + 0) for i in self.index_col]
+        f = np.vectorize(lambda x: int(x>threshold))
+
+        for i,j in enumerate(index_col):
+
+            row[i] = np.mean(f(self.data[j].loc[index_row].values))
 
         self.data.loc['percentage'] = row
 
