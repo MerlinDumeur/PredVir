@@ -335,7 +335,9 @@ class Resultat:
 
         values = [int(m[0]) for m in [re.findall(pattern,f) for f in fnamelist]]
 
-        if not replace:
+        if values == []:
+            number = kwargs.get('number',0)
+        elif not replace:
             number = max(values) + 1
         else:
             number = kwargs.get('number',max(values))
