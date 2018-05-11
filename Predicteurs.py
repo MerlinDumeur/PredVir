@@ -317,7 +317,7 @@ class Resultat:
         index_row = [CastableInt(i) for i in self.data.index.values]
         row = np.zeros(len(self.index_col))
 
-        f = np.vectorize(lambda x: int(x>threshold))
+        f = np.vectorize(lambda x: int(abs(x)>threshold))
 
         for i,j in enumerate(self.index_col):
 
