@@ -68,7 +68,7 @@ class GeneralClassifier(Predicteur):
 
             for k,m in metrics.items():
 
-                loss = m(Ytest,self.objetSK.predict_proba(Xtest)) / Xtest.shape[0]
+                loss = m(Ytest,self.objetSK.predict_proba(Xtest),labels=[0,1]) / Xtest.shape[0]
                 row = np.append(row,loss)
 
                 row = np.array([m(Ytest,self.objetSK.predict_proba(Xtest)) for m in metrics.values()])
@@ -105,8 +105,8 @@ class GeneralClassifier(Predicteur):
 
             for (k,a),(k,s) in zip(avg.items(),var.items()):
 
-                avg[k] = a.append(Res.moyennes[k])
-                var[k] = s.append(Res.variances[k])
+                a = a.append(Res.moyennes[k])
+                s = s.append(Res.variances[k])
             
 #           var.append(Res.variances[self.metrics[0]])
 #           a,v = self.stat_logloss(N=N,X=Xk,Y=Y)
