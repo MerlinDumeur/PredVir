@@ -319,7 +319,7 @@ class Resultat:
 
         f = np.vectorize(lambda x: int(x>threshold))
 
-        for i,j in enumerate(index_col):
+        for i,j in enumerate(self.index_col):
 
             row[i] = np.mean(f(self.data[j].loc[index_row].values))
 
