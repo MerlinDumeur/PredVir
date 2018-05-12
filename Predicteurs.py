@@ -101,6 +101,7 @@ class GeneralClassifier(Predicteur):
                 grid = grid[:i - len(grid)]
                 break
             Res = self.feature_relevance(X=Xk,Y=Y,weights=[])
+            Res.calculate_m(self.metrics)
             Res.calculate_v(self.metrics)
 
             for (k,a),(k,s) in zip(avg.items(),var.items()):
