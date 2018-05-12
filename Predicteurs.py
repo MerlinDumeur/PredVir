@@ -71,14 +71,14 @@ class GeneralClassifier(Predicteur):
                 loss = m(Ytest,self.objetSK.predict_proba(Xtest),labels=[0,1]) / Xtest.shape[0]
                 row = np.append(row,loss)
 
-                row = np.array([m(Ytest,self.objetSK.predict_proba(Xtest)) for m in metrics.values()])
+            #row = np.array([m(Ytest,self.objetSK.predict_proba(Xtest),labels=[0,1]) / Xtest.shape[0] for m in metrics.values()])
 
-                for w in weights:
+            for w in weights:
 
-                    row = np.append(row, getattr(self.objetSK,w))
+                row = np.append(row, getattr(self.objetSK,w))
 
-                    S = pd.Series(row,index_df)
-                    df = df.append(S,ignore_index=True)
+            S = pd.Series(row,index_df)
+            df = df.append(S,ignore_index=True)
 
         return Resultat(df,info=info)
 
