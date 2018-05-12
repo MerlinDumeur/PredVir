@@ -100,7 +100,7 @@ class GeneralClassifier(Predicteur):
             if Xk.shape[1] == 0:
                 grid = grid[:i - len(grid)]
                 break
-            Res = self.feature_relevance(X=Xk,Y=Y)
+            Res = self.feature_relevance(X=Xk,Y=Y,weights=[])
             Res.calculate_v(self.metrics)
 
             for (k,a),(k,s) in zip(avg.items(),var.items()):
@@ -284,7 +284,7 @@ class Resultat:
 
         index_row = [CastableInt(i) for i in self.data.index.values]
 
-        self.calculate_m([m for m in mlist if (m in self.index_metrics) and (self.moyennes[m] is None)])
+        #self.calculate_m([m for m in mlist if (m in self.index_metrics) and (self.moyennes[m] is None)])
 
         self.variances.update({m: np.var(self.data['metrics',m].loc[index_row].values) for m in mlist if m in self.data['metrics'].columns})
 
@@ -304,11 +304,11 @@ class Resultat:
 
         index_row = [CastableInt(i) for i in self.data.index.values]
 
-        if ('moyenne' not in self.data.index.values) or redo_m:
+        # if ('moyenne' not in self.data.index.values) or redo_m:
 
-            self.stat_m()
+        #     self.stat_m()
 
-        row = [(np.mean(self.data[j].loc[index_row] - self.data.loc['moyenne'].values[i]))**2 for i,j in enumerate(self.index_col)]
+        row = [np.var(self.data[j].loc[index_row]) for j in self.index_col]
 
         self.data.loc['variance'] = row
 
