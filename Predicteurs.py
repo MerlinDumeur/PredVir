@@ -286,7 +286,7 @@ class Resultat:
 
         self.calculate_m([m for m in mlist if (m in self.index_metrics) and (self.moyennes[m] is None)])
 
-        self.variances.update({m: np.mean((self.data['metrics',m].loc[index_row].values - self.moyennes[m])**2) for m in mlist if m in self.data['metrics'].columns})
+        self.variances.update({m: np.var(self.data['metrics',m].loc[index_row].values) for m in mlist if m in self.data['metrics'].columns})
 
         # for m in [m for m in mlist if m in self.index_metrics]:
 
