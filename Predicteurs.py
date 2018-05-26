@@ -11,6 +11,7 @@ PREDICTEUR_DICT = {
 
 PREDICTEUR_DICT['XGBClassifier'] = PREDICTEUR_DICT['XGBRegressor'] = 'XGB'
 PREDICTEUR_DICT['RandomForestClassifier'] = PREDICTEUR_DICT['RandomForestRegressor'] = 'RF'
+PREDICTEUR_DICT['GridSearchCV'] = 'GdSCV'
 
 
 class Predicteur:
@@ -81,6 +82,24 @@ class GeneralClassifier(Predicteur):
             df = df.append(S,ignore_index=True)
 
         return Resultat(df,info=info)
+
+    def feature_select_from_model_weights(self,X,Y,classifieur_relevance,weight,grid,f_smoothing):
+
+        relevance = classifieur_relevance.feature_relevance(X=X,Y=Y)
+        relevance.stat_percentage()
+        percentage = relevance.data[weight].loc['percentage']
+
+        m,s,x = self.stat_seuil(grid,percentage)
+        moy,std = np.array(m['logloss']),np.array(s['logloss'])
+
+        moy_smooth = f_smoothing(moy)
+
+        compare = x[np.argmin(moy_smooth)] * np.ones(len(percentage))
+        index_percent = np.greater(percentage,compare)
+        I = percentage.loc[index_percent].index
+
+        return I
+
 
     def grid_search(self,**kwargs):
 

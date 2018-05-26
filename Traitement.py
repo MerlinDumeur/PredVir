@@ -1,3 +1,5 @@
+import numpy
+
 def refining_expGrp(base,keep,rename,dropna_col,index_col=None):
     XpG = pd.read_csv(base+r'/'+base+'_exp_grp.csv',index_col=index_col)
     XpG = XpG[keep]
@@ -108,6 +110,8 @@ def smooth(x,window_len=11,window='hanning'):
     NOTE: length(output) != length(input), to correct this: return y[(window_len/2-1):-(window_len/2)] instead of just y.
     """
 
+    window_len = window_len + window_len%2 - 1
+
     if x.ndim != 1:
         raise ValueError('smooth only accepts 1 dimension arrays.')
 
@@ -131,4 +135,7 @@ def smooth(x,window_len=11,window='hanning'):
         w=eval('numpy.'+window+'(window_len)')
 
     y=numpy.convolve(w/w.sum(),s,mode='valid')
-    return y
+
+    margin = window_len//2
+
+    return y[margin:-margin]
