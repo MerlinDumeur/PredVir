@@ -83,14 +83,15 @@ class GeneralClassifier(Predicteur):
 
         return Resultat(df,info=info)
 
-    def feature_select_from_model_weights(self,X,Y,classifieur_relevance,weight,grid,f_smoothing):
+    def feature_select_from_model_weights(self,X,Y,classifieur_relevance,metric,weight,grid,f_smoothing):
 
-        relevance = classifieur_relevance.feature_relevance(X=X,Y=Y)
+        relevance = classifieur_relevance.feature_relevance(X=X,Y=Y,metrics=metric)
         relevance.stat_percentage()
         percentage = relevance.data[weight].loc['percentage']
 
         m,s,x = self.stat_seuil(grid,percentage)
-        moy,std = np.array(m['logloss']),np.array(s['logloss'])
+        name = [*metric.keys()][0]
+        moy,std = np.array(m[name]),np.array(s[name])
 
         moy_smooth = f_smoothing(moy)
 
