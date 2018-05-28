@@ -69,7 +69,7 @@ class GeneralClassifier(Predicteur):
 
             for k,m in metrics.items():
 
-                loss = m(Ytest,self.objetSK.predict_proba(Xtest),labels=[0,1]) / Xtest.shape[0]
+                loss = m(Ytest,self.objetSK.predict_proba(Xtest),labels=[0,1])
                 row = np.append(row,loss)
 
             #row = np.array([m(Ytest,self.objetSK.predict_proba(Xtest),labels=[0,1]) / Xtest.shape[0] for m in metrics.values()])
@@ -197,7 +197,7 @@ class GeneralRegresser(Predicteur):
 
                 for k,m in metrics.items():
 
-                    loss = m(Ytest,self.objetSK.predict(Xtest)) / Xtest.shape[0]
+                    loss = m(Ytest,self.objetSK.predict(Xtest))
                     row = np.append(row,loss)
 
                 for w in weights:
