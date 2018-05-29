@@ -89,7 +89,7 @@ class GeneralClassifier(Predicteur):
         relevance.stat_percentage()
         percentage = relevance.data[weight].loc['percentage']
 
-        m,s,x = self.stat_seuil(grid,percentage)
+        m,s,x = self.stat_seuil(grid,percentage,metrics=metric)
         name = [*metric.keys()][0]
         moy,std = np.array(m[name]),np.array(s[name])
 
@@ -111,7 +111,9 @@ class GeneralClassifier(Predicteur):
 
         X = kwargs.get('X',self.X)
         Y = kwargs.get('Y',self.Y)
-        avg,var = dict.fromkeys(self.metrics.keys(),[]),dict.fromkeys(self.metrics.keys(),[])
+        metrics = kwargs.get('metrics',self.metrics)
+
+        avg,var = dict.fromkeys(metrics.keys(),[]),dict.fromkeys(metrics.keys(),[])
         for i,k in enumerate(grid):
             compare = k * np.ones(len(percentage))
             index_percent = np.greater(percentage,compare)
@@ -120,9 +122,9 @@ class GeneralClassifier(Predicteur):
             if Xk.shape[1] == 0:
                 grid = grid[:i - len(grid)]
                 break
-            Res = self.feature_relevance(X=Xk,Y=Y,weights=[])
-            Res.calculate_m(self.metrics)
-            Res.calculate_v(self.metrics)
+            Res = self.feature_relevance(X=Xk,Y=Y,weights=[],metrics=metrics)
+            Res.calculate_m(metrics)
+            Res.calculate_v(metrics)
 
             for (k,a),(k,s) in zip(avg.items(),var.items()):
 

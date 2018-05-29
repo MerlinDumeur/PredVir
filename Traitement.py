@@ -12,31 +12,33 @@ PATHOLOGY = "pathology"
 DEAD = "dead"
 
 
-def refining_expGrp(base,keep,rename,dropna_col,index_col=None):
-    XpG = pd.read_csv(base + r'/' + base + '_exp_grp.csv',index_col=index_col)
+def refining_expGrp(base,keep,rename,dropna_col):
+    XpG = pd.read_csv(base + r'/exp_grp.csv')
     XpG = XpG[keep]
     XpG = XpG.rename(index=str,columns=rename)
     XpG = XpG.dropna(axis=0,subset=dropna_col)
+    XpG.set_index(ID,inplace=True)
     return XpG
 
 
 def refining_trscr(base,transpose=False):
-    Trscr = pd.read_csv(base + r'/' + base + '_data.csv',index_col=0)
+    Trscr = pd.read_csv(base + r'/data.csv',index_col=0)
     if transpose:
         Trscr = Trscr.transpose()
     return Trscr
 
 
-def refining_platform(base,keep,rename,dtype):
-    Plt = pd.read_csv(base + r'/' + base + '_platform.csv',dtype=dtype)
-    Plt = Plt[Plt['SPOT_ID'] != '--Control']
+def refining_platform(base,keep,rename,dtype,remove_control=False):
+    Plt = pd.read_csv(base + r'/platform.csv',dtype=dtype)
+    if remove_control:
+        Plt = Plt[Plt['SPOT_ID'] != '--Control']
     Plt = Plt[keep]
     Plt = Plt.rename(index=str,columns=rename)
     return Plt
 
 
 def OHEncoding(filename,categorical_columns):
-    DF = pd.read_csv(filename,index_col=ID)
+    DF = pd.read_pickle(filename)
     DF = pd.get_dummies(DF,columns=categorical_columns)
     return DF
 
@@ -51,7 +53,7 @@ def Create_Patient_Drop_Index_Classification(df,n_mois):
 
 
 def X_transcriptome(base,index,standardize=True):
-    X = pd.read_csv(base + r'/' + base + '_trscr.csv',index_col=0)
+    X = pd.read_pickle(base + r'/trscr.pkl')
     if standardize:
         preprocessing.scale(X,copy=False)
     return X.loc[index]
@@ -62,7 +64,7 @@ def get_function_survival(n_mois):
 
 
 def Y_clinique(base,index,n_mois=None):
-    Y = pd.read_csv(base + r'/' + base + '_clinique_OH.csv',index_col=0)
+    Y = pd.read_pickle(base + r'/clinique_OH.pkl')
     Y = Y.loc[index]
     if n_mois is None:
         Y = Y['os_months']
@@ -71,38 +73,20 @@ def Y_clinique(base,index,n_mois=None):
     return Y
 
 
-def import_X(base,predicteur_type='classifieur',nmois=None):
+def import_X(base,nmois=None,std=True):
     
-    if predicteur_type == 'classifieur':
-    
-        if nmois is not int:
-            raise ValueError('nmois must be int type')
+    classifieur = nmois is not None
+    nmois_str = f'-{nmois}' if classifieur else ""
 
-        return pd.read_csv(base + rf'/X_classification-{nmois}.csv',index_col=0)
-    
-    elif predicteur_type == 'regresser':
-    
-        return pd.read_csv(base + rf'/X_regression.csv',index_col=0)
-    
-    else:
-        raise ValueError('predicteur_type must be classifieur or regresser')
+    return pd.read_pickle(base + rf'/X_{"classification" + nmois_str if classifieur else "regression"}_{"" if std else "nostd"}.pkl')
 
 
 def import_Y(base,predicteur_type,nmois=None):
-    
-    if predicteur_type == 'classifieur':
 
-        if nmois is not int:
-            raise ValueError("nmois must be int type")
-        
-        return pd.read_csv(base + rf'/Y_classification-{nmois}.csv',index_col=0,header=None)
-    
-    elif predicteur_type == 'regresser':
-        
-        return pd.read_csv(base + rf'/Y_regression.csv',index_col=0,header=None)
+    classifieur = nmois is not None
+    nmois_str = f'-{nmois}' if classifieur else ""
 
-    else:
-        raise ValueError('predicteur_type must be classifieur or regresser')
+    return pd.read_pickle(base + rf'/Y_{"classification" + nmois_str if classifieur else "regression"}.pkl')
 
 
 # taken from https://scipy-cookbook.readthedocs.io/items/SignalSmooth.html
