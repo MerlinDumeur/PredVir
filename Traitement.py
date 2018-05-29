@@ -1,4 +1,5 @@
-import numpy
+import numpy as np
+import pandas as pd
 from sklearn import preprocessing
 
 HISTOLOGY = "histology"
@@ -70,6 +71,40 @@ def Y_clinique(base,index,n_mois=None):
     return Y
 
 
+def import_X(base,predicteur_type='classifieur',nmois=None):
+    
+    if predicteur_type == 'classifieur':
+    
+        if nmois is not int:
+            raise ValueError('nmois must be int type')
+
+        return pd.read_csv(base + rf'/X_classification-{nmois}.csv',index_col=0)
+    
+    elif predicteur_type == 'regresser':
+    
+        return pd.read_csv(base + rf'/X_regression.csv',index_col=0)
+    
+    else:
+        raise ValueError('predicteur_type must be classifieur or regresser')
+
+
+def import_Y(base,predicteur_type,nmois=None):
+    
+    if predicteur_type == 'classifieur':
+
+        if nmois is not int:
+            raise ValueError("nmois must be int type")
+        
+        return pd.read_csv(base + rf'/Y_classification-{nmois}.csv',index_col=0,header=None)
+    
+    elif predicteur_type == 'regresser':
+        
+        return pd.read_csv(base + rf'/Y_regression.csv',index_col=0,header=None)
+
+    else:
+        raise ValueError('predicteur_type must be classifieur or regresser')
+
+
 # taken from https://scipy-cookbook.readthedocs.io/items/SignalSmooth.html
 def smooth(x,window_len=11,window='hanning'):
     """smooth the data using a window with requested size.
@@ -96,7 +131,7 @@ def smooth(x,window_len=11,window='hanning'):
     
     see also:
     
-    numpy.hanning, numpy.hamming, numpy.bartlett, numpy.blackman, numpy.convolve
+    np.hanning, np.hamming, np.bartlett, np.blackman, np.convolve
     scipy.signal.lfilter
  
     TODO: the window parameter could be the window itself if an array instead of a string
@@ -117,14 +152,14 @@ def smooth(x,window_len=11,window='hanning'):
     if window not in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
         raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
 
-    s = numpy.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
+    s = np.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
     # print(len(s))
     if window == 'flat':  # moving average
-        w = numpy.ones(window_len,'d')
+        w = np.ones(window_len,'d')
     else:
-        w = eval('numpy.' + window + '(window_len)')
+        w = eval('np.' + window + '(window_len)')
 
-    y = numpy.convolve(w / w.sum(),s,mode='valid')
+    y = np.convolve(w / w.sum(),s,mode='valid')
 
     margin = window_len // 2
 
