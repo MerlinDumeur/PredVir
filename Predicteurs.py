@@ -99,7 +99,7 @@ class GeneralClassifier(Predicteur):
         index_percent = np.greater(percentage,compare)
         I = percentage.loc[index_percent].index
 
-        return I
+        return I,[m,s,x]
 
 
     def grid_search(self,**kwargs):
