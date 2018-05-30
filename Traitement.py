@@ -88,6 +88,10 @@ def import_Y(base,predicteur_type,nmois=None):
 
     return pd.read_pickle(base + rf'/Y_{"classification" + nmois_str if classifieur else "regression"}.pkl')
 
+def update_symbols(X):
+
+    
+
 
 # taken from https://scipy-cookbook.readthedocs.io/items/SignalSmooth.html
 def smooth(x,window_len=11,window='hanning'):
