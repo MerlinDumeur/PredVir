@@ -6,12 +6,14 @@ import re
 
 PREDICTEUR_DICT = {
     
-    'LinearRegression':'Lin',
-    'LogisticRegression':'Log'}
+    'LinearRegression':'LinR',
+    'Lasso':'LinR1',
+    'Ridge':'LinR2',
+    'LogisticRegression':'LogR',
+    'GridSearchCV':'GdsCV'}
 
 PREDICTEUR_DICT['XGBClassifier'] = PREDICTEUR_DICT['XGBRegressor'] = 'XGB'
 PREDICTEUR_DICT['RandomForestClassifier'] = PREDICTEUR_DICT['RandomForestRegressor'] = 'RF'
-PREDICTEUR_DICT['GridSearchCV'] = 'GdSCV'
 
 
 class Predicteur:
@@ -31,11 +33,10 @@ class Predicteur:
         if ((Y is None) and (folder is not None)):
             self.load_Y(folder)
 
-    def set_objetSK(self,objetSK):
-        self.objetSK = objetSK
+        self.name = PREDICTEUR_DICT[type(objetSK).__name__]
 
-    def set_cv(self,cv):
-        self.cv = cv
+        if self.name == 'LogR':
+            self.name = self.name + objetSK.get_params()['penalty'][1]
 
 
 class GeneralClassifier(Predicteur):
@@ -52,6 +53,7 @@ class GeneralClassifier(Predicteur):
         metrics = kwargs.get('metrics',self.metrics)
         weights = kwargs.get('weights',self.weights)
         info = kwargs.get('info',{'base':self.folder,'predicteur':PREDICTEUR_DICT[type(self.objetSK).__name__],'predicteur_type':'C','nmois':self.nmois})
+        cv = kwargs.get('cv',self.cv)
 
         index_weights = pd.MultiIndex.from_product([weights,X.columns.values],names=['weight','probe'])
         index_metrics = pd.MultiIndex.from_product([['metrics'],[*metrics.keys()]],names=['','probe'])
@@ -59,7 +61,7 @@ class GeneralClassifier(Predicteur):
 
         df = pd.DataFrame(columns=index_df)
 
-        for IndexTrain,IndexTest in self.cv.split(X,Y):
+        for IndexTrain,IndexTest in cv.split(X,Y):
 
             Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
             Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
@@ -85,7 +87,7 @@ class GeneralClassifier(Predicteur):
 
     def feature_select_from_model_weights(self,X,Y,classifieur_relevance,metric,weight,grid,f_smoothing):
 
-        relevance = classifieur_relevance.feature_relevance(X=X,Y=Y,metrics=metric)
+        relevance = classifieur_relevance.feature_relevance(X=X,Y=Y)
         relevance.stat_percentage()
         percentage = relevance.data[weight].loc['percentage']
 
@@ -112,6 +114,7 @@ class GeneralClassifier(Predicteur):
         X = kwargs.get('X',self.X)
         Y = kwargs.get('Y',self.Y)
         metrics = kwargs.get('metrics',self.metrics)
+        cv = kwargs.get('cv',self.cv)
 
         avg,var = dict.fromkeys(metrics.keys(),[]),dict.fromkeys(metrics.keys(),[])
         for i,k in enumerate(grid):
@@ -122,7 +125,7 @@ class GeneralClassifier(Predicteur):
             if Xk.shape[1] == 0:
                 grid = grid[:i - len(grid)]
                 break
-            Res = self.feature_relevance(X=Xk,Y=Y,weights=[],metrics=metrics)
+            Res = self.feature_relevance(X=Xk,Y=Y,weights=[],metrics=metrics,cv=cv)
             Res.calculate_m(metrics)
             Res.calculate_v(metrics)
 
