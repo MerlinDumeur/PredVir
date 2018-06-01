@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import glob
 import re
+import Traitement as proc
 
 PREDICTEUR_DICT = {
     
@@ -16,35 +17,40 @@ PREDICTEUR_DICT['XGBClassifier'] = PREDICTEUR_DICT['XGBRegressor'] = 'XGB'
 PREDICTEUR_DICT['RandomForestClassifier'] = PREDICTEUR_DICT['RandomForestRegressor'] = 'RF'
 
 
+def get_name_from_SK_predictor(SKpredictor):
+
+    name = PREDICTEUR_DICT[type(SKpredictor).__name__]
+
+    if name == 'LogR':
+        name = name + SKpredictor.get_params()['penalty'][1]
+
+
 class Predicteur:
 
-    def __init__(self, objetSK, cv, X=None, Y=None, folder=None, metrics={}, weights=[]):
+    def __init__(self, predicteur, nmois, cv, X=None, Y=None, base=None, metrics={}, weights=[]):
 
         self.cv = cv
-        self.objetSK = objetSK
+        self.predicteur = predicteur
         self.X = X
         self.Y = Y
         self.metrics = metrics
         self.weights = weights
-        self.folder = folder
+        self.base = base
 
-        if ((X is None) and (folder is not None)):
-            self.load_X(folder)
-        if ((Y is None) and (folder is not None)):
-            self.load_Y(folder)
+        if ((X is None) and (base is not None)):
+            proc.import_X(base,nmois)
+        if ((Y is None) and (base is not None)):
+            self.load_Y(base)
 
-        self.name = PREDICTEUR_DICT[type(objetSK).__name__]
-
-        if self.name == 'LogR':
-            self.name = self.name + objetSK.get_params()['penalty'][1]
+        self.name = get_name_from_SK_predictor(predicteur)
 
 
 class GeneralClassifier(Predicteur):
 
-    def __init__(self, objetSK, nmois, cv, X=None, Y=None, folder=None, metrics={'logloss':log_loss}, weights=[]):
+    def __init__(self, predicteur, nmois, cv, X=None, Y=None, base=None, metrics={'logloss':log_loss}, weights=[]):
 
         self.nmois = nmois
-        Predicteur.__init__(self, objetSK, cv, X, Y, folder,metrics,weights)
+        Predicteur.__init__(self, predicteur, cv, X, Y, base,metrics,weights)
 
     def feature_relevance(self,**kwargs):
 
@@ -52,7 +58,7 @@ class GeneralClassifier(Predicteur):
         Y = kwargs.get('Y',self.Y)
         metrics = kwargs.get('metrics',self.metrics)
         weights = kwargs.get('weights',self.weights)
-        info = kwargs.get('info',{'base':self.folder,'predicteur':PREDICTEUR_DICT[type(self.objetSK).__name__],'predicteur_type':'C','nmois':self.nmois})
+        info = kwargs.get('info',{'base':self.base,'predicteur':PREDICTEUR_DICT[type(self.predicteur).__name__],'predicteur_type':'C','nmois':self.nmois})
         cv = kwargs.get('cv',self.cv)
 
         index_weights = pd.MultiIndex.from_product([weights,X.columns.values],names=['weight','probe'])
@@ -65,20 +71,20 @@ class GeneralClassifier(Predicteur):
 
             Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
             Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
-            self.objetSK.fit(Xtrain,Ytrain)
+            self.predicteur.fit(Xtrain,Ytrain)
 
             row = np.array([])
 
             for k,m in metrics.items():
 
-                loss = m(Ytest,self.objetSK.predict_proba(Xtest),labels=[0,1])
+                loss = m(Ytest,self.predicteur.predict_proba(Xtest),labels=[0,1])
                 row = np.append(row,loss)
 
-            #row = np.array([m(Ytest,self.objetSK.predict_proba(Xtest),labels=[0,1]) / Xtest.shape[0] for m in metrics.values()])
+            # row = np.array([m(Ytest,self.predicteur.predict_proba(Xtest),labels=[0,1]) / Xtest.shape[0] for m in metrics.values()])
 
             for w in weights:
 
-                row = np.append(row, getattr(self.objetSK,w))
+                row = np.append(row, getattr(self.predicteur,w))
 
             S = pd.Series(row,index_df)
             df = df.append(S,ignore_index=True)
@@ -102,12 +108,6 @@ class GeneralClassifier(Predicteur):
         I = percentage.loc[index_percent].index
 
         return I,[m,s,x]
-
-
-    def grid_search(self,**kwargs):
-
-        X = kwargs.get('X',self.X)
-        Y = kwargs.get('Y',self.Y)
 
     def stat_seuil(self,grid,percentage,**kwargs):
 
@@ -139,40 +139,40 @@ class GeneralClassifier(Predicteur):
 
         return avg,var,grid
 
-    def load_X(self,folder,**kwargs):
+    def load_X(self,base,**kwargs):
         filename = kwargs.get('filename',rf'X_classification-{self.nmois}.csv')
-        self.X = pd.read_csv(folder + filename,index_col=0)
+        self.X = pd.read_csv(base + filename,index_col=0)
         
-    def load_Y(self,folder,**kwargs):
+    def load_Y(self,base,**kwargs):
         filename = kwargs.get('filename',rf'Y_classification-{self.nmois}.csv')
-        self.Y = pd.read_csvv(folder + filename,index_col=0,header=None)
+        self.Y = pd.read_csvv(base + filename,index_col=0,header=None)
 
     
 class LinearClassifieur(GeneralClassifier):
     
-    def __init__(self,objetSK,nmois,cv,X=None,Y=None,folder=None,**kwargs):
+    def __init__(self,predicteur,nmois,cv,X=None,Y=None,base=None,**kwargs):
 
         weights = kwargs.get('weights',['coef_'])
         metrics = kwargs.get('metrics',{'logloss':log_loss})
         
-        GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder,weights=weights,metrics=metrics)
+        GeneralClassifier.__init__(self,predicteur,nmois,cv,X=X,Y=Y,base=base,weights=weights,metrics=metrics)
 
 
 class EnsembleClassifieur(GeneralClassifier):
 
-    def __init__(self,objetSK,nmois,cv,X=None,Y=None,folder=None,**kwargs):
+    def __init__(self,predicteur,nmois,cv,X=None,Y=None,base=None,**kwargs):
 
         weights = kwargs.get('weights',['feature_importances_'])
         metrics = kwargs.get('metrics',{'logloss':log_loss})
 
-        GeneralClassifier.__init__(self,objetSK,nmois,cv,X=X,Y=Y,folder=folder,metrics=metrics,weights=weights)
+        GeneralClassifier.__init__(self,predicteur,nmois,cv,X=X,Y=Y,base=base,metrics=metrics,weights=weights)
 
 
 class GeneralRegresser(Predicteur):
     
-    def __init__(self,objetSK,cv,X=None,Y=None,folder=None,metrics={},weights=[]):
+    def __init__(self,predicteur,cv,X=None,Y=None,base=None,metrics={},weights=[]):
     
-        Predicteur.__init__(self,objetSK,cv,X,Y,folder,metrics,weights)
+        Predicteur.__init__(self,predicteur,cv,X,Y,base,metrics,weights)
 
     def feature_relevance(self,N=100,**kwargs):
 
@@ -180,7 +180,7 @@ class GeneralRegresser(Predicteur):
         Y = kwargs.get('Y',self.Y)
         metrics = kwargs.get('metrics',self.metrics)
         weights = kwargs.get('weights',self.weights)
-        info = kwargs.get('info',{'base':self.folder,'predicteur':PREDICTEUR_DICT[type(self.objetSK).__name__],'predicteur_type':'R'})
+        info = kwargs.get('info',{'base':self.base,'predicteur':PREDICTEUR_DICT[type(self.predicteur).__name__],'predicteur_type':'R'})
 
         index_weights = pd.MultiIndex.from_product([weights,X.columns.values],names=['weight','probe'])
         index_metrics = pd.MultiIndex.from_product([['metrics'],[*metrics.values()]],names=['','probe'])
@@ -197,18 +197,18 @@ class GeneralRegresser(Predicteur):
                 IndexTrain,IndexTest = next(kf)
                 Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
                 Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
-                self.objetSK.fit(Xtrain,Ytrain)
+                self.predicteur.fit(Xtrain,Ytrain)
                 
                 row = np.array([])
 
                 for k,m in metrics.items():
 
-                    loss = m(Ytest,self.objetSK.predict(Xtest))
+                    loss = m(Ytest,self.predicteur.predict(Xtest))
                     row = np.append(row,loss)
 
                 for w in weights:
 
-                    row = np.append(row, getattr(self.objetSK,w))
+                    row = np.append(row, getattr(self.predicteur,w))
 
                 S = pd.Series(row,index_df)
                 df = df.append(S,ignore_index=True)
@@ -231,20 +231,20 @@ class GeneralRegresser(Predicteur):
         
         return avg,var
 
-    def load_X(self,folder,**kwargs):
+    def load_X(self,base,**kwargs):
         filename = kwargs.get('filename',rf'X_regression.csv')
-        self.X = pd.read_csv(folder + filename,index_col=0)
+        self.X = pd.read_csv(base + filename,index_col=0)
         
-    def load_Y(self,folder,**kwargs):
+    def load_Y(self,base,**kwargs):
         filename = kwargs.get('filename',rf'Y_regression.csv')
-        self.Y = pd.read_csvv(folder + filename,index_col=0,header=None)
+        self.Y = pd.read_csvv(base + filename,index_col=0,header=None)
 
 
 class LinearRegresser(GeneralRegresser):
 
-    def __init__(self,objetSK,cv,X=None,Y=None,folder=None,metrics={'eqm':mean_squared_error,'eam':mean_absolute_error},weights=['coef_'],info={'type':'Classifieur','Modele':'Lineaire',}):
+    def __init__(self,predicteur,cv,X=None,Y=None,base=None,metrics={'eqm':mean_squared_error,'eam':mean_absolute_error},weights=['coef_'],info={'type':'Classifieur','Modele':'Lineaire',}):
 
-        GeneralRegresser.__init__(self,objetSK,cv,X,Y,folder,metrics,weights)
+        GeneralRegresser.__init__(self,predicteur,cv,X,Y,base,metrics,weights)
 
 #     def feature_relevance(self,threshold,N=100,**kwargs):
         
@@ -264,9 +264,9 @@ class LinearRegresser(GeneralRegresser):
                 
 #                 IndexTrain,IndexTest = next(kf)
 #                 Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
-#                 self.objetSK.fit(Xtrain,Ytrain)
-#                 avg = avg + self.objetSK.coef_ / n
-#                 index = np.greater(self.objetSK.coef_,threshold)
+#                 self.predicteur.fit(Xtrain,Ytrain)
+#                 avg = avg + self.predicteur.coef_ / n
+#                 index = np.greater(self.predicteur.coef_,threshold)
 #                 print(index)
 #                 percent[index[0]] += 1 / n
                 

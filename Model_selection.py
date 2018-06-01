@@ -1,6 +1,8 @@
 from sklearn.metrics import log_loss,make_scorer
-from sklearn.model_selection import RepeatedKFold,KFold,GridSearchCV
+from sklearn.model_selection import RepeatedKFold,KFold,GridSearchCV,RandomizedSearchCV
+from sklearn.linear_model import LinearRegression, LogisticRegression,Lasso,Ridge
 import Traitement as proc
+import Predicteurs as cl
 import pandas as pd
 import pickle
 import os
@@ -18,7 +20,7 @@ def score_predicteur(X,Y,classifieur,classifieur_frelevance,classifieur_fselect,
     scoring = kwargs.get('scoring',make_scorer(log_loss,greater_is_better=False,needs_proba=True,labels=[0,1]))
     metrics_test = kwargs.get('metrics',{'log_loss':log_loss})
 
-    GdS = GridSearchCV(classifieur.objetSK,params_grid,scoring=scoring,n_jobs=-1,cv=cv_grid,return_train_score=False)
+    GdS = GridSearchCV(classifieur.predicteur,params_grid,scoring=scoring,n_jobs=-1,cv=cv_grid,return_train_score=False)
 
     msx_list = []
 
@@ -49,27 +51,163 @@ def score_predicteur(X,Y,classifieur,classifieur_frelevance,classifieur_fselect,
     return results,msx_list
 
 
-def get_folder_data(base,CV,id,nmois=None):
+def get_filename(cv_primary,id,nmois=None,std=True):
 
     predicteur_str = 'R' if nmois is None else f'C-{nmois}'
+    
+    filename = rf'{predicteur_str}.{"S" if std else ""}.{CV_dict[type(cv_primary).__name__]}.{cv_primary.get_n_splits()}-{id}.pkl'
 
-    return base + rf'/{predicteur_str}.{CV_dict[type(CV).__name__]}.{CV.get_n_splits()}-{id}/'
+    return filename
 
 
-def generate_CV_sets(CV,base,id_list,nmois=None,replace=False):
+def get_foldername(type,base,classifieur_fr=None,classifieur_fs=None,classifieur_model=None,**kwargs):
 
-    X = proc.import_X(base,nmois)
+    filename1 = rf'/cv-sets/'
+
+    if type == 'CV_primary':
+
+        return filename1
+
+    filename2 = filename1 + rf'{classifieur_fr.name}-{classifieur_fs.name}/'
+
+    if type == 'FS':
+
+        return filename2
+
+    elif type == 'FS+CV':
+
+        return filename1,filename2
+
+    filename3 = filename2 + rf'{classifieur_model.name}/'
+
+    if type == 'model_scoring':
+
+        return filename3
+
+    elif type == 'all':
+
+        return filename1,filename2,filename3
+
+
+def get_test_train_indexes(df,i):
+
+    IndexTrain = df.loc[df[i]].index
+    IndexTest = df.index.difference(IndexTrain)
+
+    return IndexTrain,IndexTest
+
+
+def generate_CV_sets(cv_primary,base,id_list,nmois=None,replace=False,std=True):
+
+    X = proc.import_X(base,nmois,standardize=std)
     Y = proc.import_Y(base,nmois)
 
     for id in id_list:
 
-        folderdata = get_folder_data(base,CV,id,nmois)
-        os.makedirs(os.path.dirname(folderdata), exist_ok=True)
+        df = pd.DataFrame(index=X.index,columns=np.arange(1,cv_primary.get_n_splits()))
 
-        for i,(IndexTrain,IndexTest) in enumerate(CV.split(X,Y)):
+        for i,(IndexTrain,IndexTest) in enumerate(cv_primary.split(X,Y)):
 
-            IndexTrain.to_frame().to_pickle(folderdata + f'IndexTrain-{i}.pkl')
-            IndexTest.to_frame().to_pickle(folderdata + f'IndexTest-{i}.pkl')
+            Index = [i in IndexTrain for i in X.index]
+            df[i] = Index
+
+        foldername = get_foldername('CV_primary',base)
+        filename = get_filename(cv_primary,id,nmois,std)
+        df.to_pickle(foldername + filename)
+
+
+def Build_optimizer(hyperparameters,predicteur='auto',predicteur_params={},Hyperparameter_optimizer='auto',optimizer_params={},cv_nested=None):
+
+    if predicteur in ['LogR2','auto']:
+        predicteur = LogisticRegression(n_jobs=-1)
+    elif predicteur == 'LogR1':
+        predicteur = LogisticRegression(penalty='l1',n_jobs=-1)
+    elif predicteur == 'LinR':
+        predicteur = LinearRegression(n_jobs=-1)
+    elif predicteur == 'Lasso':
+        predicteur = Lasso(n_jobs=-1)
+    elif predicteur == 'Ridge':
+        predicteur = Ridge(n_jobs=-1)
+    else:
+        predicteur = predicteur
+
+    predicteur.set_params(predicteur_params)
+
+    if Hyperparameter_optimizer in ['auto','Grid']:
+        optimizer = GridSearchCV(predicteur,hyperparameters,cv_nested=cv_nested)
+    elif Hyperparameter_optimizer == 'Random':
+        optimizer = RandomizedSearchCV(predicteur,hyperparameters,cv_nested=cv_nested)
+    else:
+        optimizer = Hyperparameter_optimizer(predicteur,hyperparameters,cv_nested=cv_nested)
+    
+    optimizer.set_params(optimizer_params)
+
+    return optimizer
+
+
+def score_model(self,base,id_list,optimizer,cv_primary,classifieur_frelevance,classifieur_fselect,metrics,nmois=None,std=True):
+
+    param = optimizer.get_params()
+
+    validation_metric = param['scoring'].__dict__['_score_func']
+
+    MI = pd.MultiIndex.from_arrays([['general'],['fs_size']])
+    
+    arrays = [['Test'] * len(metrics) + 2,['score',validation_metric.__name__,*metrics.keys()]]
+    MI2 = pd.MultiIndex.from_arrays(arrays)
+    MI = MI.append(MI2)
+    
+    param_grid = param['param_grid']
+    param_namelist = ['param_' + p for p in param_grid.keys()]
+    arrays = [['Validation'] * len(param_grid),[*param_grid.keys()]]
+    MI3 = pd.MultiIndex.from_arrays(arrays)
+    MI = MI.append(MI3)
+
+    foldername_cv,foldername_fs,foldername_scoring = get_foldername('all',base,classifieur_fr,classifieur_fs,classifieur_scored)
+
+    os.makedirs(os.path.dirname(foldername_scoring), exist_ok=True)
+
+    for id in id_list:
+
+        filename = get_filename(cv_primary,id,nmois,std)
+
+        df_cv = pd.read_pickle(foldername_cv + filename)
+        df_fs = pd.read_pickle(foldername_fs + filename)
+
+        X = pd.import_X(base,nmois,std)
+        Y = pd.import_Y(base,nmois)
+
+        for i in range(cv_primary.get_n_splits()):
+
+            IndexVal_cv = df_cv[i]
+            IndexVal_fs = df_fs[i].loc[X.columns]
+
+            IndexTest_cv = X.index.difference(IndexVal_cv)
+
+            Xval = X.loc[IndexVal_cv,IndexVal_fs]
+            Yval = Y.loc[IndexVal_cv]
+
+            Xtest = X.loc[IndexTest_cv,IndexVal_fs]
+            Ytest = Y.loc[IndexTest_cv]
+
+            optimizer.fit(Xval,Yval)
+
+            best_params = GdS.best_params_
+
+            score = optimizer.score(Xtest,Ytest)
+            validation_metric = optimizer.
+
+
+        df_output = pd.DataFrame(index=np.arange(cv_primary.get_n_splits()),columns=MI)
+
+class ModelTester:
+
+    def __init__(self,feature_selector,optimizer):
+
+        self.optimizer = optimizer
+        self.feature_selector = feature_selector
+
+    # def test_model(self,base,id_list,nmois=None):
 
 
 class FeatureSelector:
@@ -96,23 +234,28 @@ class FeatureSelector:
 
     def select_features(self,X,Y):
 
-        relevance = self.classifieur_frelevance(X=X,Y=Y,metrics={})
+        relevance = self.classifieur_frelevance(X=X,Y=Y,metrics={},cv=self.cv_frelevance)
         relevance.stat_percentage()
         percentage = relevance.data[self.weight_frelevance].loc['percentage']
 
-        m,s,x = self.stat_seuil(self.grid_frelevance,percentage,metrics={'loss':self.metric_fselect})
+        m,s,x = self.stat_seuil(self.grid_frelevance,percentage,metrics={'loss':self.metric_fselect},cv=self.cv_fselect)
         moy,std = np.array(m['loss'])
         graph = {'abscisse':x,'moyenne':moy,'std':std}
 
         moy_smooth = self.smoothing_fselect(moy)
         compare = x[np.argmin(moy_smooth)] * np.ones(len(percentage))
-        index_percent = np.greater(percentage,compare)
+        Index_bool = np.greater(percentage,compare)
 
-        I = percentage.loc[index_percent].index
+        return Index_bool,graph
 
-        return I,graph
+    def generate_featureselection(self,base,cv_primary,id_list,nmois=None,save_graph=False,**kwargs):
 
-    def generate_featureselection(self,base,CV,id_list,nmois=None,save_graph=False):
+        std = kwargs.get('std',True)
+        replace = kwargs.get('replace',False)
+
+        foldername_input,foldername_output = get_foldername('FS+CV',base,self.classifieur_frelevance,self.classifieur_fselect)
+        
+        os.makedirs(os.path.dirname(foldername_output), exist_ok=True)
 
         # if nmois is None:
         #     predicteur_type = 'R'
@@ -125,23 +268,32 @@ class FeatureSelector:
 
         for id in id_list:
 
-            folderdata = get_folder_data(base,CV,id)
-            folderoutput = folderdata + rf'{self.classifieur_frelevance.name}-{self.classifieur_fselect.name}/'
+            filename = get_filename(cv_primary,id,replace=replace,std=std)
+
+            df_cv = pd.read_pickle(foldername_input + filename)
 
             X = proc.import_X(base,nmois)
             Y = proc.import_Y(base,nmois)
 
-            for i in range(CV.get_n_splits()):
+            output = pd.DataFrame(index=X.columns,columns=np.arange(cv_primary.get_n_splits()))
 
-                IndexTrain = pd.read_pickle(folderdata + rf'IndexTrain-{i}.pkl').index
+            graph_dict = {}
+
+            for i in range(cv_primary.get_n_splits()):
+
+                IndexTrain,IndexTest = get_test_train_indexes(df_cv,i)
 
                 Xtrain = X.loc[IndexTrain]
                 Ytrain = Y.loc[IndexTrain]
 
                 I,graph = self.select_features(X=Xtrain,Y=Ytrain)
 
-                I.to_frame().to_pickle(folderoutput + f'Index-{i}.pkl')
+                output[i].loc[X.columns] = I
+
+                I.to_frame().to_pickle(foldername_output + f'Index-{i}.pkl')
 
                 if save_graph:
-                    with open(folderoutput + f'Graph-{i}.pkl', 'wb') as fp:
-                        pickle.dump(graph,fp,protocol=pickle.HIGHEST_PROTOCOL)
+                    graph_dict[i] = graph
+            
+            with open(foldername_output + f'Graph.pkl', 'wb') as fp:
+                pickle.dump(graph_dict,fp,protocol=pickle.HIGHEST_PROTOCOL)
