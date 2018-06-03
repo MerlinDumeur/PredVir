@@ -78,10 +78,10 @@ def import_X(base,nmois=None,std=True):
     classifieur = nmois is not None
     nmois_str = f'-{nmois}' if classifieur else ""
 
-    return pd.read_pickle(base + rf'/X_{"classification" + nmois_str if classifieur else "regression"}_{"" if std else "nostd"}.pkl')
+    return pd.read_pickle(base + rf'/X_{"classification" + nmois_str if classifieur else "regression"}{"" if std else "_nostd"}.pkl')
 
 
-def import_Y(base,predicteur_type,nmois=None):
+def import_Y(base,nmois=None):
 
     classifieur = nmois is not None
     nmois_str = f'-{nmois}' if classifieur else ""

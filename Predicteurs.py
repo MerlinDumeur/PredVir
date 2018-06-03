@@ -24,6 +24,8 @@ def get_name_from_SK_predictor(SKpredictor):
     if name == 'LogR':
         name = name + SKpredictor.get_params()['penalty'][1]
 
+    return name
+
 
 class Predicteur:
 
@@ -37,10 +39,10 @@ class Predicteur:
         self.weights = weights
         self.base = base
 
-        if ((X is None) and (base is not None)):
-            proc.import_X(base,nmois)
-        if ((Y is None) and (base is not None)):
-            self.load_Y(base)
+        # if ((X is None) and (base is not None)):
+        #     proc.import_X(base,nmois)
+        # if ((Y is None) and (base is not None)):
+        #     self.load_Y(base)
 
         self.name = get_name_from_SK_predictor(predicteur)
 
@@ -61,9 +63,14 @@ class GeneralClassifier(Predicteur):
         info = kwargs.get('info',{'base':self.base,'predicteur':PREDICTEUR_DICT[type(self.predicteur).__name__],'predicteur_type':'C','nmois':self.nmois})
         cv = kwargs.get('cv',self.cv)
 
+#        print(weights)
+#        print(metrics)
+
         index_weights = pd.MultiIndex.from_product([weights,X.columns.values],names=['weight','probe'])
         index_metrics = pd.MultiIndex.from_product([['metrics'],[*metrics.keys()]],names=['','probe'])
         index_df = index_metrics.append(index_weights)
+
+#        print(index_df)
 
         df = pd.DataFrame(columns=index_df)
 
@@ -286,9 +293,14 @@ class Resultat:
         self.data = data
         self.info = info
 
-        self.index_weights = self.data.columns.get_level_values(0).unique().drop('metrics').values
-        self.index_metrics = self.data['metrics'].columns.values
-        index = np.append(self.index_metrics,self.index_weights)
+        if 'metrics' in self.data.columns:
+            self.index_weights = self.data.columns.get_level_values(0).unique().drop('metrics').values
+            self.index_metrics = self.data['metrics'].columns.values
+            index = np.append(self.index_metrics,self.index_weights)
+        else:
+            index = self.data.columns.get_level_values(0).unique().values
+
+        
         self.moyennes = dict.fromkeys(index,None)
         self.variances = dict.fromkeys(index,None)
 

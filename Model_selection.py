@@ -6,6 +6,7 @@ import Predicteurs as cl
 import pandas as pd
 import pickle
 import os
+import numpy as np
 
 CV_dict = {
     'KFold':'KF',
@@ -62,7 +63,7 @@ def get_filename(cv_primary,id,nmois=None,std=True):
 
 def get_foldername(type,base,classifieur_fr=None,classifieur_fs=None,classifieur_model=None,**kwargs):
 
-    filename1 = rf'/cv-sets/'
+    filename1 = base + rf'/cv-sets/'
 
     if type == 'CV_primary':
 
@@ -99,14 +100,16 @@ def get_test_train_indexes(df,i):
 
 def generate_CV_sets(cv_primary,base,id_list,nmois=None,replace=False,std=True):
 
-    X = proc.import_X(base,nmois,standardize=std)
+    X = proc.import_X(base,nmois,std=std)
     Y = proc.import_Y(base,nmois)
 
     for id in id_list:
 
         df = pd.DataFrame(index=X.index,columns=np.arange(1,cv_primary.get_n_splits()))
 
-        for i,(IndexTrain,IndexTest) in enumerate(cv_primary.split(X,Y)):
+        for i,(IndexTrain_iloc,IndexTest) in enumerate(cv_primary.split(X,Y)):
+
+            IndexTrain = X.iloc[IndexTrain_iloc].index
 
             Index = [i in IndexTrain for i in X.index]
             df[i] = Index
@@ -195,7 +198,7 @@ def score_model(self,base,id_list,optimizer,cv_primary,classifieur_frelevance,cl
             best_params = GdS.best_params_
 
             score = optimizer.score(Xtest,Ytest)
-            validation_metric = optimizer.
+            validation_metric = optimizer.best_score_
 
 
         df_output = pd.DataFrame(index=np.arange(cv_primary.get_n_splits()),columns=MI)
@@ -234,13 +237,17 @@ class FeatureSelector:
 
     def select_features(self,X,Y):
 
-        relevance = self.classifieur_frelevance(X=X,Y=Y,metrics={},cv=self.cv_frelevance)
+        relevance = self.classifieur_frelevance.feature_relevance(X=X,Y=Y,metrics={},cv=self.cv_frelevance,weights=[self.weight_frelevance])
         relevance.stat_percentage()
         percentage = relevance.data[self.weight_frelevance].loc['percentage']
 
-        m,s,x = self.stat_seuil(self.grid_frelevance,percentage,metrics={'loss':self.metric_fselect},cv=self.cv_fselect)
-        moy,std = np.array(m['loss'])
+#        print('done_frelevance')
+
+        m,s,x = self.classifieur_fselect.stat_seuil(self.grid_frelevance,percentage,metrics={'loss':self.metric_fselect},cv=self.cv_fselect,X=X,Y=Y)
+        moy,std = np.array(m['loss']),np.array(s['loss'])
         graph = {'abscisse':x,'moyenne':moy,'std':std}
+
+#        print('done_stat_seuil')
 
         moy_smooth = self.smoothing_fselect(moy)
         compare = x[np.argmin(moy_smooth)] * np.ones(len(percentage))
@@ -254,7 +261,7 @@ class FeatureSelector:
         replace = kwargs.get('replace',False)
 
         foldername_input,foldername_output = get_foldername('FS+CV',base,self.classifieur_frelevance,self.classifieur_fselect)
-        
+
         os.makedirs(os.path.dirname(foldername_output), exist_ok=True)
 
         # if nmois is None:
@@ -268,7 +275,9 @@ class FeatureSelector:
 
         for id in id_list:
 
-            filename = get_filename(cv_primary,id,replace=replace,std=std)
+            print(id)
+
+            filename = get_filename(cv_primary,id,nmois,std=std)
 
             df_cv = pd.read_pickle(foldername_input + filename)
 
@@ -288,12 +297,13 @@ class FeatureSelector:
 
                 I,graph = self.select_features(X=Xtrain,Y=Ytrain)
 
-                output[i].loc[X.columns] = I
-
-                I.to_frame().to_pickle(foldername_output + f'Index-{i}.pkl')
+                output[i] = I
 
                 if save_graph:
                     graph_dict[i] = graph
             
-            with open(foldername_output + f'Graph.pkl', 'wb') as fp:
-                pickle.dump(graph_dict,fp,protocol=pickle.HIGHEST_PROTOCOL)
+            if save_graph:
+                with open(foldername_output + f'Graph.pkl', 'wb') as fp:
+                    pickle.dump(graph_dict,fp,protocol=pickle.HIGHEST_PROTOCOL)
+
+            output.to_pickle(foldername_output + filename)
