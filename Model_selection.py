@@ -262,6 +262,8 @@ class FeatureSelector:
 
         foldername_input,foldername_output = get_foldername('FS+CV',base,self.classifieur_frelevance,self.classifieur_fselect)
 
+        graphs = {}
+
         os.makedirs(os.path.dirname(foldername_output), exist_ok=True)
 
         # if nmois is None:
@@ -301,9 +303,11 @@ class FeatureSelector:
 
                 if save_graph:
                     graph_dict[i] = graph
-            
-            if save_graph:
-                with open(foldername_output + f'Graph.pkl', 'wb') as fp:
-                    pickle.dump(graph_dict,fp,protocol=pickle.HIGHEST_PROTOCOL)
 
             output.to_pickle(foldername_output + filename)
+            if save_graph:
+                graphs[id] = graph_dict
+
+        if save_graph:
+            with open(foldername_output + f'Graph.pkl', 'wb') as fp:
+                pickle.dump(graph_dict,fp,protocol=pickle.HIGHEST_PROTOCOL)
