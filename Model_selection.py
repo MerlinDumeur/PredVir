@@ -15,53 +15,45 @@ CV_dict = {
     'RepeatedStratifiedKFold':'SRKF'
 }
 
+# def score_predicteur(X,Y,classifieur,classifieur_fr,classifieur_fs,weight_fs,grid_fs,params_grid,metric_fs=log_loss,cv_main=KFold(n_splits=3,shuffle=True),cv_grid=KFold(n_splits=5,shuffle=True),smoothing_fs=lambda m:proc.smooth(m,window_len=5,window='hanning'),**kwargs):
 
-def score_predicteur(X,Y,classifieur,classifieur_frelevance,classifieur_fselect,weight_fs,grid_fs,params_grid,metric_fs=log_loss,cv_main=KFold(n_splits=3,shuffle=True),cv_grid=KFold(n_splits=5,shuffle=True),smoothing_fs=lambda m:proc.smooth(m,window_len=5,window='hanning'),**kwargs):
+#     scoring = kwargs.get('scoring',make_scorer(log_loss,greater_is_better=False,needs_proba=True,labels=[0,1]))
+#     metrics_test = kwargs.get('metrics',{'log_loss':log_loss})
 
-    scoring = kwargs.get('scoring',make_scorer(log_loss,greater_is_better=False,needs_proba=True,labels=[0,1]))
-    metrics_test = kwargs.get('metrics',{'log_loss':log_loss})
+#     GdS = GridSearchCV(classifieur.predicteur,params_grid,scoring=scoring,n_jobs=-1,cv=cv_grid,return_train_score=False)
 
-    GdS = GridSearchCV(classifieur.predicteur,params_grid,scoring=scoring,n_jobs=-1,cv=cv_grid,return_train_score=False)
+#     msx_list = []
 
-    msx_list = []
+#     Index_results = ['score','log_loss','fs_size'] + [k for k in params_grid]
+#     results = pd.DataFrame(columns=Index_results)
 
-    Index_results = ['score','log_loss','fs_size'] + [k for k in params_grid]
-    results = pd.DataFrame(columns=Index_results)
+#     for IndexValidation,IndexTest in cv_main.split(X,Y):
 
-    for IndexValidation,IndexTest in cv_main.split(X,Y):
+#         Xval,Yval = X.iloc[IndexValidation],Y.iloc[IndexValidation]
+#         Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
 
-        Xval,Yval = X.iloc[IndexValidation],Y.iloc[IndexValidation]
-        Xtest,Ytest = X.iloc[IndexTest],Y.iloc[IndexTest]
 
-        I,msx = classifieur_fselect.feature_select_from_model_weights(Xval,Yval,classifieur_frelevance,{"metric_fs":metric_fs},weight_fs,grid_fs,smoothing_fs)
+#         I,msx = classifieur_fs.feature_select_percentage(X=Xval,Y=Yval,percentage=percentage,cv_fs=,classifieur_fr,,weight_fs,grid_fs,smoothing_fs)
+#         X,Y,percentage,cv_fs,metric,grid_fs,f_smoothing
 
-        msx_list.append(msx)
+#         msx_list.append(msx)
 
-        GdS.fit(Xval[I],Yval)
-        estimator = GdS.best_estimator_
-        data = GdS.best_params_.copy()
+#         GdS.fit(Xval[I],Yval)
+#         estimator = GdS.best_estimator_
+#         data = GdS.best_params_.copy()
 
-        data['log_loss'] = log_loss(Ytest,estimator.predict_proba(Xtest[I]),labels=[0,1])
-        data['score'] = estimator.score(Xtest[I],Ytest)
-        data['fs_size'] = len(I)
+#         data['log_loss'] = log_loss(Ytest,estimator.predict_proba(Xtest[I]),labels=[0,1])
+#         data['score'] = estimator.score(Xtest[I],Ytest)
+#         data['fs_size'] = len(I)
 
-        S = pd.Series(data=data,index=Index_results)
+#         S = pd.Series(data=data,index=Index_results)
 
-        results = results.append(S,ignore_index=True)
+#         results = results.append(S,ignore_index=True)
         
-    return results,msx_list
+#     return results,msx_list
 
 
-def get_filename(cv_primary,id,nmois=None,std=True):
-
-    predicteur_str = 'R' if nmois is None else f'C-{nmois}'
-    
-    filename = rf'{predicteur_str}.{"S" if std else ""}.{CV_dict[type(cv_primary).__name__]}.{cv_primary.get_n_splits()}-{id}.pkl'
-
-    return filename
-
-
-def get_foldername(type,base,classifieur_fr=None,classifieur_fs=None,classifieur_model=None,**kwargs):
+def get_foldername(type,base,classifieur_fr=None,classifieur_fs=None,model=None,**kwargs):
 
     filename1 = base + rf'/cv-sets/'
 
@@ -79,7 +71,7 @@ def get_foldername(type,base,classifieur_fr=None,classifieur_fs=None,classifieur
 
         return filename1,filename2
 
-    filename3 = filename2 + rf'{classifieur_model.name}/'
+    filename3 = filename2 + rf'{model.name}/'
 
     if type == 'model_scoring':
 
@@ -98,169 +90,168 @@ def get_test_train_indexes(df,i):
     return IndexTrain,IndexTest
 
 
-def generate_CV_sets(cv_primary,base,id_list,nmois=None,replace=False,std=True):
+def generate_CV_sets(baseSet,replace=False):
 
-    X = proc.import_X(base,nmois,std=std)
-    Y = proc.import_Y(base,nmois)
+    X = proc.import_X(baseSet.base,baseSet.nmois,std=baseSet.std)
+    Y = proc.import_Y(baseSet.base,baseSet.nmois)
 
-    for id in id_list:
+    for id in baseSet.id_list:
 
-        df = pd.DataFrame(index=X.index,columns=np.arange(1,cv_primary.get_n_splits()))
+        df = pd.DataFrame(index=X.index,columns=np.arange(1,baseSet.cv_primary.get_n_splits()))
 
-        for i,(IndexTrain_iloc,IndexTest) in enumerate(cv_primary.split(X,Y)):
+        for i,(IndexTrain_iloc,IndexTest) in enumerate(baseSet.cv_primary.split(X,Y)):
 
             IndexTrain = X.iloc[IndexTrain_iloc].index
 
             Index = [i in IndexTrain for i in X.index]
             df[i] = Index
 
-        foldername = get_foldername('CV_primary',base)
-        filename = get_filename(cv_primary,id,nmois,std)
+        foldername = get_foldername('CV_primary',baseSet.base)
+        filename = baseSet.get_filename(id)
         df.to_pickle(foldername + filename)
 
 
-def Build_optimizer(hyperparameters,predicteur='auto',predicteur_params={},Hyperparameter_optimizer='auto',optimizer_params={},cv_nested=None):
+class BaseSet:
 
-    if predicteur in ['LogR2','auto']:
-        predicteur = LogisticRegression(n_jobs=-1)
-    elif predicteur == 'LogR1':
-        predicteur = LogisticRegression(penalty='l1',n_jobs=-1)
-    elif predicteur == 'LinR':
-        predicteur = LinearRegression(n_jobs=-1)
-    elif predicteur == 'Lasso':
-        predicteur = Lasso(n_jobs=-1)
-    elif predicteur == 'Ridge':
-        predicteur = Ridge(n_jobs=-1)
-    else:
-        predicteur = predicteur
+    def __init__(self,base,id_list,cv_primary,nmois=None,std=True):
 
-    predicteur.set_params(predicteur_params)
+        self.base = base
+        self.id_list = id_list
+        self.cv_primary = cv_primary
+        self.nmois = nmois
+        self.std = std
 
-    if Hyperparameter_optimizer in ['auto','Grid']:
-        optimizer = GridSearchCV(predicteur,hyperparameters,cv_nested=cv_nested)
-    elif Hyperparameter_optimizer == 'Random':
-        optimizer = RandomizedSearchCV(predicteur,hyperparameters,cv_nested=cv_nested)
-    else:
-        optimizer = Hyperparameter_optimizer(predicteur,hyperparameters,cv_nested=cv_nested)
-    
-    optimizer.set_params(optimizer_params)
+    def get_filename(self,id):
 
-    return optimizer
+        predicteur_str = 'R' if self.nmois is None else f'C-{self.nmois}'
+        
+        filename = rf'{predicteur_str}.{"S" if self.std else ""}.{CV_dict[type(self.cv_primary).__name__]}.{self.cv_primary.get_n_splits()}-{id}.pkl'
+
+        return filename
+
+    def import_X(self):
+
+        return proc.import_X(self.base,self.nmois,self.std)
+
+    def import_Y(self):
+
+        return proc.import_Y(self.base,self.nmois)
 
 
-def score_model(self,base,id_list,optimizer,cv_primary,classifieur_frelevance,classifieur_fselect,metrics,nmois=None,std=True):
+class Model:
 
-    param = optimizer.get_params()
+    def __init__(self,feature_selector,predictorCV):
 
-    validation_metric = param['scoring'].__dict__['_score_func']
-
-    MI = pd.MultiIndex.from_arrays([['general'],['fs_size']])
-    
-    arrays = [['Test'] * len(metrics) + 2,['score',validation_metric.__name__,*metrics.keys()]]
-    MI2 = pd.MultiIndex.from_arrays(arrays)
-    MI = MI.append(MI2)
-    
-    param_grid = param['param_grid']
-    param_namelist = ['param_' + p for p in param_grid.keys()]
-    arrays = [['Validation'] * len(param_grid),[*param_grid.keys()]]
-    MI3 = pd.MultiIndex.from_arrays(arrays)
-    MI = MI.append(MI3)
-
-    foldername_cv,foldername_fs,foldername_scoring = get_foldername('all',base,classifieur_fr,classifieur_fs,classifieur_scored)
-
-    os.makedirs(os.path.dirname(foldername_scoring), exist_ok=True)
-
-    for id in id_list:
-
-        filename = get_filename(cv_primary,id,nmois,std)
-
-        df_cv = pd.read_pickle(foldername_cv + filename)
-        df_fs = pd.read_pickle(foldername_fs + filename)
-
-        X = pd.import_X(base,nmois,std)
-        Y = pd.import_Y(base,nmois)
-
-        for i in range(cv_primary.get_n_splits()):
-
-            IndexVal_cv = df_cv[i]
-            IndexVal_fs = df_fs[i].loc[X.columns]
-
-            IndexTest_cv = X.index.difference(IndexVal_cv)
-
-            Xval = X.loc[IndexVal_cv,IndexVal_fs]
-            Yval = Y.loc[IndexVal_cv]
-
-            Xtest = X.loc[IndexTest_cv,IndexVal_fs]
-            Ytest = Y.loc[IndexTest_cv]
-
-            optimizer.fit(Xval,Yval)
-
-            best_params = GdS.best_params_
-
-            score = optimizer.score(Xtest,Ytest)
-            validation_metric = optimizer.best_score_
-
-
-        df_output = pd.DataFrame(index=np.arange(cv_primary.get_n_splits()),columns=MI)
-
-class ModelTester:
-
-    def __init__(self,feature_selector,optimizer):
-
-        self.optimizer = optimizer
+        self.predictorCV = predictorCV
         self.feature_selector = feature_selector
 
-    # def test_model(self,base,id_list,nmois=None):
+    def score_model(self,baseSet,metrics={}):
+
+        param = self.optimizer.get_params()
+
+        validation_metric = param['scoring'].__dict__['_score_func']
+
+        MI = pd.MultiIndex.from_arrays([['general'],['fs_size']])
+        MI_final = MI.copy()
+
+        arrays_m = [['Test'] * len(metrics) + 2,['score',validation_metric.__name__,*metrics.keys()]]
+        MI2 = pd.MultiIndex.from_arrays(arrays_m)
+        MI_final = MI_final.append(MI2)
+        
+        param_grid = param['param_grid']
+        # param_namelist = ['param_' + p for p in param_grid.keys()]
+        arrays_p = [['Validation'] * len(param_grid),[*param_grid.keys()]]
+        MI3 = pd.MultiIndex.from_arrays(arrays_p)
+        MI_final = MI_final.append(MI3)
+
+        foldername_cv,foldername_fs,foldername_scoring = get_foldername('all',baseSet.base,self.feature_selector.classifieur_fr,self.feature_selector.classifieur_fs,self.predictorCV)
+
+        os.makedirs(os.path.dirname(foldername_scoring), exist_ok=True)
+
+        X = baseSet.import_X()
+        Y = baseSet.import_Y()
+
+        for id in baseSet.id_list:
+
+            filename = baseSet.get_filename(id)
+
+            df_cv = pd.read_pickle(foldername_cv + filename)
+            df_fs = pd.read_pickle(foldername_fs + filename)
+
+            df_output = pd.DataFrame(index=np.arange(baseSet.cv_primary.get_n_splits()),columns=MI_final)
+
+            for i in range(baseSet.cv_primary.get_n_splits()):
+
+                IndexVal_cv = df_cv[i]
+                IndexVal_fs = df_fs[i].loc[X.columns]
+
+                IndexTest_cv = X.index.difference(IndexVal_cv)
+
+                Xval = X.loc[IndexVal_cv,IndexVal_fs]
+                Yval = Y.loc[IndexVal_cv]
+
+                Xtest = X.loc[IndexTest_cv,IndexVal_fs]
+                Ytest = Y.loc[IndexTest_cv]
+
+                self.predictorCV.fit(Xval,Yval)
+
+                best_params = self.predictorCV.best_params()
+
+                score = self.predictorCV.score(Xtest,Ytest)
+                vm = validation_metric(Ytest,self.predicteurCV.predict_proba(Xtest),labels=[0,1])
+
+                df_output.loc[i,'general']['fs_size'] = Xval.shape[1]
+                df_output.loc[i,'Test'] = [score,vm] + [metrics[m](Ytest,self.predicteurCV.predict_proba(Xtest),labels=[0,1]) for m in arrays_m[1]]
+                df_output.loc[i,'Validation'] = [best_params[k] for k in arrays_p[1]]
+
+                # validation_metric = self.predictorCV.best_score()
+
+            df_output.to_pickle(foldername_scoring + filename)
 
 
 class FeatureSelector:
 
-    def __init__(self,classifieur_frelevance,grid_frelevance,weight_frelevance,classifieur_fselect,metric_fselect,smoothing_fselect='auto',cv_frelevance=None,cv_fselect=None):
+    def __init__(self,classifieur_fr,grid_fr,weight_fr,classifieur_fs,metric_fs,smoothing_fs='auto',cv_fr=None,cv_fs=None):
 
-        if cv_frelevance is None:
-            cv_frelevance = RepeatedKFold(n_splits=5,n_repeats=10)
+        if cv_fr is None:
+            cv_fr = RepeatedKFold(n_splits=5,n_repeats=10)
 
-        if cv_fselect is None:
-            cv_fselect = KFold(n_splits=5,shuffle=True)
+        if cv_fs is None:
+            cv_fs = KFold(n_splits=5,shuffle=True)
 
-        self.classifieur_frelevance = classifieur_frelevance
-        self.classifieur_fselect = classifieur_fselect
+        self.classifieur_fr = classifieur_fr
+        self.classifieur_fs = classifieur_fs
 
-        self.grid_frelevance = grid_frelevance
-        self.weight_frelevance = weight_frelevance
+        self.grid_fr = grid_fr
+        self.weight_fr = weight_fr
 
-        self.cv_fselect = cv_fselect
-        self.cv_frelevance = cv_frelevance
+        self.cv_fs = cv_fs
+        self.cv_fr = cv_fr
 
-        self.metric_fselect = metric_fselect
-        self.smoothing_fselect = smoothing_fselect
+        self.metric_fs = metric_fs
+        self.smoothing_fs = smoothing_fs
 
     def select_features(self,X,Y):
 
-        relevance = self.classifieur_frelevance.feature_relevance(X=X,Y=Y,metrics={},cv=self.cv_frelevance,weights=[self.weight_frelevance])
+        relevance = self.classifieur_fr.feature_relevance_XY(X=X,Y=Y,metrics={},weights=[self.weight_fr],cv=self.cv_fr)
         relevance.stat_percentage()
-        percentage = relevance.data[self.weight_frelevance].loc['percentage']
+        percentage = relevance.data[self.weight_fr].loc['percentage']
 
-#        print('done_frelevance')
-
-        m,s,x = self.classifieur_fselect.stat_seuil(self.grid_frelevance,percentage,metrics={'loss':self.metric_fselect},cv=self.cv_fselect,X=X,Y=Y)
+        m,s,x = self.classifieur_fs.stat_seuil(X=X,Y=Y,metrics={'loss':self.metric_fs},cv=self.cv_fs,grid=self.grid_fr,percentage=percentage)
         moy,std = np.array(m['loss']),np.array(s['loss'])
         graph = {'abscisse':x,'moyenne':moy,'std':std}
 
-#        print('done_stat_seuil')
-
-        moy_smooth = self.smoothing_fselect(moy)
+        moy_smooth = self.smoothing_fs(moy)
         compare = x[np.argmin(moy_smooth)] * np.ones(len(percentage))
         Index_bool = np.greater(percentage,compare)
 
         return Index_bool,graph
 
-    def generate_featureselection(self,base,cv_primary,id_list,nmois=None,save_graph=False,**kwargs):
+    def generate_featureselection(self,baseSet,save_graph=False,**kwargs):
 
-        std = kwargs.get('std',True)
         replace = kwargs.get('replace',False)
 
-        foldername_input,foldername_output = get_foldername('FS+CV',base,self.classifieur_frelevance,self.classifieur_fselect)
+        foldername_input,foldername_output = get_foldername('FS+CV',baseSet.base,self.classifieur_fr,self.classifieur_fs)
 
         graphs = {}
 
@@ -275,22 +266,22 @@ class FeatureSelector:
 
         # predicteur_str = predicteur_type + nmois_str
 
-        for id in id_list:
+        for id in baseSet.id_list:
 
             print(id)
 
-            filename = get_filename(cv_primary,id,nmois,std=std)
+            filename = baseSet.get_filename(id)
 
             df_cv = pd.read_pickle(foldername_input + filename)
 
-            X = proc.import_X(base,nmois)
-            Y = proc.import_Y(base,nmois)
+            X = baseSet.import_X()
+            Y = baseSet.import_Y()
 
-            output = pd.DataFrame(index=X.columns,columns=np.arange(cv_primary.get_n_splits()))
+            output = pd.DataFrame(index=X.columns,columns=np.arange(baseSet.cv_primary.get_n_splits()))
 
             graph_dict = {}
 
-            for i in range(cv_primary.get_n_splits()):
+            for i in range(baseSet.cv_primary.get_n_splits()):
 
                 IndexTrain,IndexTest = get_test_train_indexes(df_cv,i)
 

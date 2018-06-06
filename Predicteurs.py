@@ -1,3 +1,5 @@
+from sklearn.model_selection import RepeatedKFold,KFold,GridSearchCV,RandomizedSearchCV
+from sklearn.linear_model import LinearRegression, LogisticRegression,Lasso,Ridge
 from sklearn.metrics import log_loss,mean_squared_error,mean_absolute_error
 import numpy as np
 import pandas as pd
@@ -11,10 +13,15 @@ PREDICTEUR_DICT = {
     'Lasso':'LinR1',
     'Ridge':'LinR2',
     'LogisticRegression':'LogR',
-    'GridSearchCV':'GdsCV'}
-
-PREDICTEUR_DICT['XGBClassifier'] = PREDICTEUR_DICT['XGBRegressor'] = 'XGB'
-PREDICTEUR_DICT['RandomForestClassifier'] = PREDICTEUR_DICT['RandomForestRegressor'] = 'RF'
+    'GridSearchCV':'GdsCV',
+    'XGBClassifier':'XGB',
+    'XGBRegressor':'XGB',
+    'RandomForestClassifier':'RF',
+    'RandomForestRegressor':'RF',
+    'LogisticRegressionCV':'LogRCV',
+    'GridSearchCV':'GSCV',
+    'RandomizedSearchCV':'RSCV'
+}
 
 
 def get_name_from_SK_predictor(SKpredictor):
@@ -27,51 +34,107 @@ def get_name_from_SK_predictor(SKpredictor):
     return name
 
 
-class Predicteur:
+def get_name_from_optimizer(opt):
 
-    def __init__(self, predicteur, nmois, cv, X=None, Y=None, base=None, metrics={}, weights=[]):
+    try:
 
-        self.cv = cv
+        name = opt.name
+
+    except AttributeError:
+
+        name = get_name_from_SK_predictor(opt)
+
+    return name
+
+
+def seuil(Array,S):
+
+    f_s = lambda x: int(x > S)
+    f = np.vectorize(f_s)
+
+    return f(Array)
+
+
+def Build_optimizer(hyperparameters,predicteur='auto',predicteur_params={},Hyperparameter_optimizer='auto',optimizer_params={},cv_nested=None):
+
+    if predicteur in ['LogR2','auto']:
+        predicteur = LogisticRegression(n_jobs=-1)
+    elif predicteur == 'LogR1':
+        predicteur = LogisticRegression(penalty='l1',n_jobs=-1)
+    elif predicteur == 'LinR':
+        predicteur = LinearRegression(n_jobs=-1)
+    elif predicteur == 'Lasso':
+        predicteur = Lasso(n_jobs=-1)
+    elif predicteur == 'Ridge':
+        predicteur = Ridge(n_jobs=-1)
+    else:
+        predicteur = predicteur
+
+    predicteur.set_params(predicteur_params)
+
+    if Hyperparameter_optimizer in ['auto','Grid']:
+        optimizer = GridSearchCV(predicteur,hyperparameters,cv_nested=cv_nested)
+    elif Hyperparameter_optimizer == 'Random':
+        optimizer = RandomizedSearchCV(predicteur,hyperparameters,cv_nested=cv_nested)
+    else:
+        optimizer = Hyperparameter_optimizer(predicteur,hyperparameters,cv_nested=cv_nested)
+    
+    optimizer.set_params(optimizer_params)
+
+    return optimizer
+
+
+class PredictorCV:
+
+    def __init__(self,optimizer):
+
+        self.optimizer = optimizer
+        self.name = get_name_from_optimizer(optimizer)
+
+    def fit(self,X,Y):
+
+        self.optimizer.fit(X,Y)
+
+    def predict_proba(self,X):
+
+        return self.optimizer.predict_proba(X)
+
+    def score(self,X,Y):
+
+        return self.optimizer.score(X,Y)
+
+    def get_params(self):
+
+        return self.optimizer.get_params()
+
+    def best_params(self):
+
+        return self.optimizer.best_params_
+
+    def best_score(self):
+
+        return self.optimizer.best_score_
+
+
+class Predictor:
+
+    def __init__(self, predicteur):
+
         self.predicteur = predicteur
-        self.X = X
-        self.Y = Y
-        self.metrics = metrics
-        self.weights = weights
-        self.base = base
-
-        # if ((X is None) and (base is not None)):
-        #     proc.import_X(base,nmois)
-        # if ((Y is None) and (base is not None)):
-        #     self.load_Y(base)
-
         self.name = get_name_from_SK_predictor(predicteur)
 
 
-class GeneralClassifier(Predicteur):
+class Classifier(Predictor):
 
-    def __init__(self, predicteur, nmois, cv, X=None, Y=None, base=None, metrics={'logloss':log_loss}, weights=[]):
+    def __init__(self, predicteur):
 
-        self.nmois = nmois
-        Predicteur.__init__(self, predicteur, cv, X, Y, base,metrics,weights)
+        Predictor.__init__(self, predicteur)
 
-    def feature_relevance(self,**kwargs):
-
-        X = kwargs.get('X',self.X)
-        Y = kwargs.get('Y',self.Y)
-        metrics = kwargs.get('metrics',self.metrics)
-        weights = kwargs.get('weights',self.weights)
-        info = kwargs.get('info',{'base':self.base,'predicteur':PREDICTEUR_DICT[type(self.predicteur).__name__],'predicteur_type':'C','nmois':self.nmois})
-        cv = kwargs.get('cv',self.cv)
-
-#        print(weights)
-#        print(metrics)
+    def feature_relevance_XY(self,X,Y,metrics,weights,cv,**kwargs):
 
         index_weights = pd.MultiIndex.from_product([weights,X.columns.values],names=['weight','probe'])
         index_metrics = pd.MultiIndex.from_product([['metrics'],[*metrics.keys()]],names=['','probe'])
         index_df = index_metrics.append(index_weights)
-
-#        print(index_df)
-
         df = pd.DataFrame(columns=index_df)
 
         for IndexTrain,IndexTest in cv.split(X,Y):
@@ -87,8 +150,6 @@ class GeneralClassifier(Predicteur):
                 loss = m(Ytest,self.predicteur.predict_proba(Xtest),labels=[0,1])
                 row = np.append(row,loss)
 
-            # row = np.array([m(Ytest,self.predicteur.predict_proba(Xtest),labels=[0,1]) / Xtest.shape[0] for m in metrics.values()])
-
             for w in weights:
 
                 row = np.append(row, getattr(self.predicteur,w))
@@ -96,32 +157,23 @@ class GeneralClassifier(Predicteur):
             S = pd.Series(row,index_df)
             df = df.append(S,ignore_index=True)
 
-        return Resultat(df,info=info)
+        return Resultat(df)
 
-    def feature_select_from_model_weights(self,X,Y,classifieur_relevance,metric,weight,grid,f_smoothing):
+    # def feature_select_percentage(self,X,Y,percentage,cv_fselect,metric,grid_fselect,f_smoothing):
 
-        relevance = classifieur_relevance.feature_relevance(X=X,Y=Y)
-        relevance.stat_percentage()
-        percentage = relevance.data[weight].loc['percentage']
+    #     m,s,x = self.stat_seuil(X=X,Y=Y,metrics=metric,cv=cv_fselect,grid=grid_fselect,percentage=percentage)
+    #     name = [*metric.keys()][0]
+    #     moy,std = np.array(m[name]),np.array(s[name])
 
-        m,s,x = self.stat_seuil(grid,percentage,metrics=metric)
-        name = [*metric.keys()][0]
-        moy,std = np.array(m[name]),np.array(s[name])
+    #     moy_smooth = f_smoothing(moy)
 
-        moy_smooth = f_smoothing(moy)
+    #     compare = x[np.argmin(moy_smooth)] * np.ones(len(percentage))
+    #     index_percent = np.greater(percentage,compare)
+    #     I = percentage.loc[index_percent].index
 
-        compare = x[np.argmin(moy_smooth)] * np.ones(len(percentage))
-        index_percent = np.greater(percentage,compare)
-        I = percentage.loc[index_percent].index
+    #     return I,[m,s,x]
 
-        return I,[m,s,x]
-
-    def stat_seuil(self,grid,percentage,**kwargs):
-
-        X = kwargs.get('X',self.X)
-        Y = kwargs.get('Y',self.Y)
-        metrics = kwargs.get('metrics',self.metrics)
-        cv = kwargs.get('cv',self.cv)
+    def stat_seuil(self,X,Y,metrics,cv,grid,percentage,**kwargs):
 
         avg,var = dict.fromkeys(metrics.keys(),[]),dict.fromkeys(metrics.keys(),[])
         for i,k in enumerate(grid):
@@ -140,46 +192,15 @@ class GeneralClassifier(Predicteur):
 
                 a = a.append(Res.moyennes[k])
                 s = s.append(Res.variances[k])
-            
-#           var.append(Res.variances[self.metrics[0]])
-#           a,v = self.stat_logloss(N=N,X=Xk,Y=Y)
 
         return avg,var,grid
 
-    def load_X(self,base,**kwargs):
-        filename = kwargs.get('filename',rf'X_classification-{self.nmois}.csv')
-        self.X = pd.read_csv(base + filename,index_col=0)
-        
-    def load_Y(self,base,**kwargs):
-        filename = kwargs.get('filename',rf'Y_classification-{self.nmois}.csv')
-        self.Y = pd.read_csvv(base + filename,index_col=0,header=None)
 
-    
-class LinearClassifieur(GeneralClassifier):
-    
-    def __init__(self,predicteur,nmois,cv,X=None,Y=None,base=None,**kwargs):
-
-        weights = kwargs.get('weights',['coef_'])
-        metrics = kwargs.get('metrics',{'logloss':log_loss})
-        
-        GeneralClassifier.__init__(self,predicteur,nmois,cv,X=X,Y=Y,base=base,weights=weights,metrics=metrics)
-
-
-class EnsembleClassifieur(GeneralClassifier):
-
-    def __init__(self,predicteur,nmois,cv,X=None,Y=None,base=None,**kwargs):
-
-        weights = kwargs.get('weights',['feature_importances_'])
-        metrics = kwargs.get('metrics',{'logloss':log_loss})
-
-        GeneralClassifier.__init__(self,predicteur,nmois,cv,X=X,Y=Y,base=base,metrics=metrics,weights=weights)
-
-
-class GeneralRegresser(Predicteur):
+class Regressor(Predictor):
     
     def __init__(self,predicteur,cv,X=None,Y=None,base=None,metrics={},weights=[]):
     
-        Predicteur.__init__(self,predicteur,cv,X,Y,base,metrics,weights)
+        Predictor.__init__(self,predicteur,cv,X,Y,base,metrics,weights)
 
     def feature_relevance(self,N=100,**kwargs):
 
@@ -238,60 +259,11 @@ class GeneralRegresser(Predicteur):
         
         return avg,var
 
-    def load_X(self,base,**kwargs):
-        filename = kwargs.get('filename',rf'X_regression.csv')
-        self.X = pd.read_csv(base + filename,index_col=0)
-        
-    def load_Y(self,base,**kwargs):
-        filename = kwargs.get('filename',rf'Y_regression.csv')
-        self.Y = pd.read_csvv(base + filename,index_col=0,header=None)
-
-
-class LinearRegresser(GeneralRegresser):
-
-    def __init__(self,predicteur,cv,X=None,Y=None,base=None,metrics={'eqm':mean_squared_error,'eam':mean_absolute_error},weights=['coef_'],info={'type':'Classifieur','Modele':'Lineaire',}):
-
-        GeneralRegresser.__init__(self,predicteur,cv,X,Y,base,metrics,weights)
-
-#     def feature_relevance(self,threshold,N=100,**kwargs):
-        
-#         X = kwargs.get('X',self.X)
-#         Y = kwargs.get('Y',self.Y)
-        
-#         percent,avg = np.zeros(X.shape[1]),np.zeros(X.shape[1])
-#         threshold = threshold * np.ones(X.shape[1])
-        
-#         n = self.cv.get_n_splits() * N
-        
-#         for k in range(N):
-            
-#             kf = self.cv.split(X,Y)
-            
-#             for i in range(self.cv.get_n_splits()):
-                
-#                 IndexTrain,IndexTest = next(kf)
-#                 Xtrain,Ytrain = X.iloc[IndexTrain],Y.iloc[IndexTrain]
-#                 self.predicteur.fit(Xtrain,Ytrain)
-#                 avg = avg + self.predicteur.coef_ / n
-#                 index = np.greater(self.predicteur.coef_,threshold)
-#                 print(index)
-#                 percent[index[0]] += 1 / n
-                
-#         return percent,avg
-
-
-def seuil(Array,S):
-    f_s = lambda x: int(x > S)
-    f = np.vectorize(f_s)
-    return f(Array)
-
-
 class Resultat:
 
-    def __init__(self,data,info={}):
+    def __init__(self,data):
 
         self.data = data
-        self.info = info
 
         if 'metrics' in self.data.columns:
             self.index_weights = self.data.columns.get_level_values(0).unique().drop('metrics').values
@@ -300,7 +272,6 @@ class Resultat:
         else:
             index = self.data.columns.get_level_values(0).unique().values
 
-        
         self.moyennes = dict.fromkeys(index,None)
         self.variances = dict.fromkeys(index,None)
 
@@ -355,7 +326,7 @@ class Resultat:
         index_row = [CastableInt(i) for i in self.data.index.values]
         row = np.zeros(len(self.index_col))
 
-        f = np.vectorize(lambda x: int(abs(x)>threshold))
+        f = np.vectorize(lambda x: int(abs(x) > threshold))
 
         for i,j in enumerate(self.index_col):
 
@@ -363,27 +334,26 @@ class Resultat:
 
         self.data.loc['percentage'] = row
 
-    def save(self,replace=False,**kwargs):
+    def save(self,filename,replace=False,**kwargs):
 
-        pattern = '.*_(\d*?).csv'
+        # pattern = '.*_(\d*?).csv'
 
-        fname = rf'{self.info["base"]}/Stat.{self.info["predicteur_type"]}.{self.info["predicteur"]}'
+        # fname = rf'{self.info["base"]}/Stat.{self.info["predicteur_type"]}.{self.info["predicteur"]}'
 
-        if self.info['predicteur_type'] == 'C':
-            fname = fname + f"-{self.info['nmois']}"
+        # if self.info['predicteur_type'] == 'C':
+        #     fname = fname + f"-{self.info['nmois']}"
 
-        fnamelist = glob.glob(fname + '_*.csv')
+        # fnamelist = glob.glob(fname + '_*.csv')
 
-        values = [int(m[0]) for m in [re.findall(pattern,f) for f in fnamelist]]
+        # values = [int(m[0]) for m in [re.findall(pattern,f) for f in fnamelist]]
 
-        if values == []:
-            number = kwargs.get('number',0)
-        elif not replace:
-            number = max(values) + 1
-        else:
-            number = kwargs.get('number',max(values))
+        # if values == []:
+        #     number = kwargs.get('number',0)
+        # elif not replace:
+        #     number = max(values) + 1
+        # else:
+        #     number = kwargs.get('number',max(values))
         
-        filename = kwargs.get('filename',fname + f'_{number}.csv')
         self.data.to_csv(filename)
 
 

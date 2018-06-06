@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import Model_selection as ms
 from sklearn import preprocessing
 
 HISTOLOGY = "histology"
@@ -81,12 +82,61 @@ def import_X(base,nmois=None,std=True):
     return pd.read_pickle(base + rf'/X_{"classification" + nmois_str if classifieur else "regression"}{"" if std else "_nostd"}.pkl')
 
 
+def import_index_fs(base,id,cv_primary,classifieur_fr,classifieur_fs,nmois=None,std=True):
+
+    filename = ms.get_filename(cv_primary,id,nmois,std)
+    foldername = ms.get_foldername('FS',base,classifieur_fr,classifieur_fs)
+
+    df = pd.read_pickle(foldername + filename)
+
+    return df
+
+
+def import_index_cv(base,id,cv_primary,nmois=None,std=True):
+
+    filename = ms.get_filename(cv_primary,id,nmois,std)
+    foldername = ms.get_foldername('CV_primary',base)
+
+    df = pd.read_pickle(foldername + filename)
+
+    return df
+
+
 def import_Y(base,nmois=None):
 
     classifieur = nmois is not None
     nmois_str = f'-{nmois}' if classifieur else ""
 
     return pd.read_pickle(base + rf'/Y_{"classification" + nmois_str if classifieur else "regression"}.pkl')
+
+
+def import_val_test_XY_cv_fs(base,id,cv_primary,cv_i,nmois=None,std=True,classifieur_fr=None,classifieur_fs=None):
+
+    fs = (classifieur_fr is not None) and (classifieur_fs is not None)
+
+    X = import_X(base=base,nmois=nmois,std=std)
+    Y = import_Y(base=base,nmois=nmois)
+
+    Index_cv = import_index_cv(base,id,cv_primary,nmois,std)
+
+    IndexVal,IndexTest = ms.get_test_train_indexes(Index_cv,cv_i)
+
+    Y_val = Y.loc[IndexVal]
+    Y_test = Y.loc[IndexTest]
+
+    if fs:
+        Index_fs = import_index_fs(base,id,cv_primary,classifieur_fr,classifieur_fs,nmois=nmois,std=std)
+        Indexfs = Index_fs.loc[Index_fs[cv_i]].index
+
+        X_fs = X.loc[:,Indexfs]
+
+    else:
+        X_fs = X
+    
+    X_val = X_fs.loc[IndexVal]
+    X_test = X_fs.loc[IndexTest]
+
+    return X_fs,X_val,Y_val,X_test,Y_test
 
 
 # taken from https://scipy-cookbook.readthedocs.io/items/SignalSmooth.html
