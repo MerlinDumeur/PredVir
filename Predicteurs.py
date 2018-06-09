@@ -86,11 +86,12 @@ def Build_optimizer(hyperparameters,predicteur='auto',predicteur_params={},Hyper
 
 class PredictorCV:
 
-    def __init__(self,optimizer,param_grid_name):
+    def __init__(self,optimizer,param_grid_name,best_params_name):
 
         self.optimizer = optimizer
         self.name = get_name_from_optimizer(optimizer)
         self.param_grid_name = param_grid_name
+        self.best_params_name = best_params_name
 
     def fit(self,X,Y):
 
@@ -110,7 +111,7 @@ class PredictorCV:
 
     def best_params(self):
 
-        return self.optimizer.best_params_
+        return getattr(self.optimizer,self.best_params_name)
 
     def best_score(self):
 
@@ -259,6 +260,7 @@ class Regressor(Predictor):
             var.append(v)
         
         return avg,var
+
 
 class Resultat:
 

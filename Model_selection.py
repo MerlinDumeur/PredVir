@@ -145,25 +145,25 @@ class Model:
         self.predictorCV = predictorCV
         self.feature_selector = feature_selector
 
-    def score_model(self,dataSet,metrics={}):
+    def score_model(self,dataSet,metrics={},use_fs=True):
 
         param = self.predictorCV.get_params()
 
-        if isinstance(param['scoring'],str):
-            validation_metric = get_scorer(param['scoring'])
-        else:
-            validation_metric = param['scoring'].__dict__['_score_func']
+        # if isinstance(param['scoring'],str):
+        #     validation_metric = get_scorer(param['scoring'])
+        # else:
+        #     validation_metric = param['scoring'].__dict__['_score_func']
 
         MI = pd.MultiIndex.from_arrays([['general'],['fs_size']])
         MI_final = MI.copy()
 
-        arrays_m = [['Test'] * (len(metrics) + 2),['score','validation_metric',*metrics.keys()]]
+        arrays_m = [['Test'] * (len(metrics) + 1),['score',*metrics.keys()]]
         MI2 = pd.MultiIndex.from_arrays(arrays_m)
         MI_final = MI_final.append(MI2)
         
         param_grid = param[self.predictorCV.param_grid_name]
         # param_namelist = ['param_' + p for p in param_grid.keys()]
-        arrays_p = [['Validation'] * len(param_grid),[*param_grid]]
+        arrays_p = [['Validation'] * (len(param_grid) + 1),['score',*param_grid]]
         MI3 = pd.MultiIndex.from_arrays(arrays_p)
         MI_final = MI_final.append(MI3)
 
@@ -188,27 +188,31 @@ class Model:
                 IndexVal_fs = df_fs[i].loc[X.columns]
                 IndexVal_cv,IndexTest_cv = get_test_train_indexes(df_cv,i)
 
-                Xval = X.loc[IndexVal_cv,IndexVal_fs]
-                Yval = Y.loc[IndexVal_cv]
+                if use_fs:
+                    Xval = X.loc[IndexVal_cv,IndexVal_fs]
+                    Xtest = X.loc[IndexTest_cv,IndexVal_fs]
+                else:
+                    Xval = X.loc[IndexVal_cv]
+                    Xtest = X.loc[IndexTest_cv]
 
-                Xtest = X.loc[IndexTest_cv,IndexVal_fs]
+                Yval = Y.loc[IndexVal_cv]
                 Ytest = Y.loc[IndexTest_cv]
 
                 self.predictorCV.fit(Xval,Yval)
 
                 best_params = self.predictorCV.best_params()
-
                 score = self.predictorCV.score(Xtest,Ytest)
-                # vm = validation_metric(Ytest,self.predictorCV.predict_proba(Xtest))
-                vm = validation_metric(self.predictorCV,Xtest,Ytest)
-
-                df_output.loc[i,'general']['fs_size'] = Xval.shape[1]
+                # vm = validation_metric(self.predictorCV,Xtest,Ytest)
+    
+                df_output.loc[i,'general'] = Xval.shape[1]
                 # print(df_output.loc[i,'Test'])
                 # print(score)
                 # print(vm)
                 # print([score,vm] + [metrics[m](Ytest,self.predictorCV.predict_proba(Xtest),labels=[0,1]) for m in arrays_m[1]])
-                df_output.loc[i,'Test'] = [score,vm] + [metrics[m](Ytest,self.predictorCV.predict_proba(Xtest),labels=[0,1]) for m in arrays_m[1][2:]]
-                df_output.loc[i,'Validation'] = [best_params[k] for k in arrays_p[1]]
+                df_output.loc[i,'Test'] = [score] + [metrics[m](Ytest,self.predictorCV.predict_proba(Xtest),labels=[0,1]) for m in arrays_m[1][1:]]
+                df_output.loc[i,'Validation'] = [self.predictorCV.best_score()] + [best_params[k] for k in arrays_p[1][1:]]
+                # else:
+                #     df_output.loc[i,'Validation'] = [self.predictorCV.best_score()] + [best_params[0]]
 
                 # validation_metric = self.predictorCV.best_score()
 
