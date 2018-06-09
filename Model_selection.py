@@ -1,4 +1,4 @@
-from sklearn.metrics import log_loss,make_scorer
+from sklearn.metrics import log_loss,make_scorer,get_scorer
 from sklearn.model_selection import RepeatedKFold,KFold,GridSearchCV,RandomizedSearchCV
 from sklearn.linear_model import LinearRegression, LogisticRegression,Lasso,Ridge
 import Traitement as proc
@@ -90,28 +90,28 @@ def get_test_train_indexes(df,i):
     return IndexTrain,IndexTest
 
 
-def generate_CV_sets(baseSet,replace=False):
+def generate_CV_sets(dataSet,replace=False):
 
-    X = proc.import_X(baseSet.base,baseSet.nmois,std=baseSet.std)
-    Y = proc.import_Y(baseSet.base,baseSet.nmois)
+    X = proc.import_X(dataSet.base,dataSet.nmois,std=dataSet.std)
+    Y = proc.import_Y(dataSet.base,dataSet.nmois)
 
-    for id in baseSet.id_list:
+    for id in dataSet.id_list:
 
-        df = pd.DataFrame(index=X.index,columns=np.arange(1,baseSet.cv_primary.get_n_splits()))
+        df = pd.DataFrame(index=X.index,columns=np.arange(1,dataSet.cv_primary.get_n_splits()))
 
-        for i,(IndexTrain_iloc,IndexTest) in enumerate(baseSet.cv_primary.split(X,Y)):
+        for i,(IndexTrain_iloc,IndexTest) in enumerate(dataSet.cv_primary.split(X,Y)):
 
             IndexTrain = X.iloc[IndexTrain_iloc].index
 
             Index = [i in IndexTrain for i in X.index]
             df[i] = Index
 
-        foldername = get_foldername('CV_primary',baseSet.base)
-        filename = baseSet.get_filename(id)
+        foldername = get_foldername('CV_primary',dataSet.base)
+        filename = dataSet.get_filename(id)
         df.to_pickle(foldername + filename)
 
 
-class BaseSet:
+class DataSet:
 
     def __init__(self,base,id_list,cv_primary,nmois=None,std=True):
 
@@ -145,47 +145,48 @@ class Model:
         self.predictorCV = predictorCV
         self.feature_selector = feature_selector
 
-    def score_model(self,baseSet,metrics={}):
+    def score_model(self,dataSet,metrics={}):
 
-        param = self.optimizer.get_params()
+        param = self.predictorCV.get_params()
 
-        validation_metric = param['scoring'].__dict__['_score_func']
+        if isinstance(param['scoring'],str):
+            validation_metric = get_scorer(param['scoring'])
+        else:
+            validation_metric = param['scoring'].__dict__['_score_func']
 
         MI = pd.MultiIndex.from_arrays([['general'],['fs_size']])
         MI_final = MI.copy()
 
-        arrays_m = [['Test'] * len(metrics) + 2,['score',validation_metric.__name__,*metrics.keys()]]
+        arrays_m = [['Test'] * (len(metrics) + 2),['score','validation_metric',*metrics.keys()]]
         MI2 = pd.MultiIndex.from_arrays(arrays_m)
         MI_final = MI_final.append(MI2)
         
-        param_grid = param['param_grid']
+        param_grid = param[self.predictorCV.param_grid_name]
         # param_namelist = ['param_' + p for p in param_grid.keys()]
-        arrays_p = [['Validation'] * len(param_grid),[*param_grid.keys()]]
+        arrays_p = [['Validation'] * len(param_grid),[*param_grid]]
         MI3 = pd.MultiIndex.from_arrays(arrays_p)
         MI_final = MI_final.append(MI3)
 
-        foldername_cv,foldername_fs,foldername_scoring = get_foldername('all',baseSet.base,self.feature_selector.classifieur_fr,self.feature_selector.classifieur_fs,self.predictorCV)
+        foldername_cv,foldername_fs,foldername_scoring = get_foldername('all',dataSet.base,self.feature_selector.classifieur_fr,self.feature_selector.classifieur_fs,self.predictorCV)
 
         os.makedirs(os.path.dirname(foldername_scoring), exist_ok=True)
 
-        X = baseSet.import_X()
-        Y = baseSet.import_Y()
+        X = dataSet.import_X()
+        Y = dataSet.import_Y()
 
-        for id in baseSet.id_list:
+        for id in dataSet.id_list:
 
-            filename = baseSet.get_filename(id)
+            filename = dataSet.get_filename(id)
 
             df_cv = pd.read_pickle(foldername_cv + filename)
             df_fs = pd.read_pickle(foldername_fs + filename)
 
-            df_output = pd.DataFrame(index=np.arange(baseSet.cv_primary.get_n_splits()),columns=MI_final)
+            df_output = pd.DataFrame(index=np.arange(dataSet.cv_primary.get_n_splits()),columns=MI_final)
 
-            for i in range(baseSet.cv_primary.get_n_splits()):
+            for i in range(dataSet.cv_primary.get_n_splits()):
 
-                IndexVal_cv = df_cv[i]
                 IndexVal_fs = df_fs[i].loc[X.columns]
-
-                IndexTest_cv = X.index.difference(IndexVal_cv)
+                IndexVal_cv,IndexTest_cv = get_test_train_indexes(df_cv,i)
 
                 Xval = X.loc[IndexVal_cv,IndexVal_fs]
                 Yval = Y.loc[IndexVal_cv]
@@ -198,10 +199,15 @@ class Model:
                 best_params = self.predictorCV.best_params()
 
                 score = self.predictorCV.score(Xtest,Ytest)
-                vm = validation_metric(Ytest,self.predicteurCV.predict_proba(Xtest),labels=[0,1])
+                # vm = validation_metric(Ytest,self.predictorCV.predict_proba(Xtest))
+                vm = validation_metric(self.predictorCV,Xtest,Ytest)
 
                 df_output.loc[i,'general']['fs_size'] = Xval.shape[1]
-                df_output.loc[i,'Test'] = [score,vm] + [metrics[m](Ytest,self.predicteurCV.predict_proba(Xtest),labels=[0,1]) for m in arrays_m[1]]
+                # print(df_output.loc[i,'Test'])
+                # print(score)
+                # print(vm)
+                # print([score,vm] + [metrics[m](Ytest,self.predictorCV.predict_proba(Xtest),labels=[0,1]) for m in arrays_m[1]])
+                df_output.loc[i,'Test'] = [score,vm] + [metrics[m](Ytest,self.predictorCV.predict_proba(Xtest),labels=[0,1]) for m in arrays_m[1][2:]]
                 df_output.loc[i,'Validation'] = [best_params[k] for k in arrays_p[1]]
 
                 # validation_metric = self.predictorCV.best_score()
@@ -247,11 +253,11 @@ class FeatureSelector:
 
         return Index_bool,graph
 
-    def generate_featureselection(self,baseSet,save_graph=False,**kwargs):
+    def generate_featureselection(self,dataSet,save_graph=False,**kwargs):
 
         replace = kwargs.get('replace',False)
 
-        foldername_input,foldername_output = get_foldername('FS+CV',baseSet.base,self.classifieur_fr,self.classifieur_fs)
+        foldername_input,foldername_output = get_foldername('FS+CV',dataSet.base,self.classifieur_fr,self.classifieur_fs)
 
         graphs = {}
 
@@ -266,22 +272,22 @@ class FeatureSelector:
 
         # predicteur_str = predicteur_type + nmois_str
 
-        for id in baseSet.id_list:
+        for id in dataSet.id_list:
 
             print(id)
 
-            filename = baseSet.get_filename(id)
+            filename = dataSet.get_filename(id)
 
             df_cv = pd.read_pickle(foldername_input + filename)
 
-            X = baseSet.import_X()
-            Y = baseSet.import_Y()
+            X = dataSet.import_X()
+            Y = dataSet.import_Y()
 
-            output = pd.DataFrame(index=X.columns,columns=np.arange(baseSet.cv_primary.get_n_splits()))
+            output = pd.DataFrame(index=X.columns,columns=np.arange(dataSet.cv_primary.get_n_splits()))
 
             graph_dict = {}
 
-            for i in range(baseSet.cv_primary.get_n_splits()):
+            for i in range(dataSet.cv_primary.get_n_splits()):
 
                 IndexTrain,IndexTest = get_test_train_indexes(df_cv,i)
 

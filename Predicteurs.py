@@ -86,10 +86,11 @@ def Build_optimizer(hyperparameters,predicteur='auto',predicteur_params={},Hyper
 
 class PredictorCV:
 
-    def __init__(self,optimizer):
+    def __init__(self,optimizer,param_grid_name):
 
         self.optimizer = optimizer
         self.name = get_name_from_optimizer(optimizer)
+        self.param_grid_name = param_grid_name
 
     def fit(self,X,Y):
 
