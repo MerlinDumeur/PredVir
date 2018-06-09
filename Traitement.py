@@ -2,6 +2,9 @@ import numpy as np
 import pandas as pd
 import Model_selection as ms
 from sklearn import preprocessing
+import requests
+import json
+import time
 
 HISTOLOGY = "histology"
 SEX = "sex"
@@ -137,6 +140,75 @@ def import_val_test_XY_cv_fs(base,id,cv_primary,cv_i,nmois=None,std=True,classif
     X_test = X_fs.loc[IndexTest]
 
     return X_fs,X_val,Y_val,X_test,Y_test
+
+
+def update_genes(X,filename=None):
+
+    array_s = X.columns.values
+    l = array_s.tolist()
+    dict_s = {s:s for s in l}
+
+    for v in dict_s:
+        if 'HS.' in dict_s[v]:
+            dict_s[v] = 'Hs' + dict_s[v][2:]
+        elif '.' in dict_s[v]:
+            dict_s[v] = dict_s[v][:dict_s[v].rfind('.')]
+
+    dict_s_inv = {v:k for k,v in dict_s.items()}
+
+    chaine = ', '.join(str(e) for e in l)
+
+    query_api_epimed(chaine)
+
+    df = pd.read_csv('temp_geneupdate.csv',sep=';',index_col=0)
+    df = df.dropna(axis=0,subset=['gene_symbol'])
+    df = df.rename(index=dict_s_inv)
+
+    X = X.loc[:,df.index]
+    X = X.rename(columns=df['gene_symbol'])
+
+    if filename is not None:
+        X.to_pickle(filename)
+
+    return X
+
+
+def query_api_epimed(chaine):
+
+    url = 'http://epimed.univ-grenoble-alpes.fr/database/query/'
+
+    r = requests.get(url + 'jobid')
+
+    json_l = json.loads(r.text)
+    jobid = json_l['jobid']
+
+    data = {"taxid":'9606','jobid':jobid,'symbols':chaine}
+
+    requests.post(url + 'genes/update',data)
+
+    finished = False
+
+    while not finished:
+
+        r3 = requests.get(url + 'jobstatus?jobid=' + jobid)
+        json3 = json.loads(r3.text)
+
+        finished = json3['status'] in ['succes','error']
+
+        time.sleep(300)
+
+    if json3['status'] == 'error':
+
+        raise Exception('EPIMED ERROR')
+
+    r4 = requests.get(url + 'jobs?jobid=' + jobid)
+    
+    # r4_d = r4.content.decode('utf-8')
+    # csv_r = csv.reader(r4_d.splitlines(), delimiter=',')
+
+    f = open('temp_geneupdate.csv','w')
+    f.write(r4.text)
+    f.close()
 
 
 # taken from https://scipy-cookbook.readthedocs.io/items/SignalSmooth.html
