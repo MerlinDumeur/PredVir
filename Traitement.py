@@ -193,7 +193,7 @@ def query_api_epimed(chaine):
         r3 = requests.get(url + 'jobstatus?jobid=' + jobid)
         json3 = json.loads(r3.text)
 
-        finished = json3['status'] in ['succes','error']
+        finished = json3['status'] in ['success','error']
 
         time.sleep(300)
 
