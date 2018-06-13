@@ -5,6 +5,7 @@ from sklearn import preprocessing
 import requests
 import json
 import time
+from scipy.stats import iqr
 
 HISTOLOGY = "histology"
 SEX = "sex"
@@ -158,19 +159,96 @@ def update_genes(X,filename=None):
 
     chaine = ', '.join(str(e) for e in l)
 
-    query_api_epimed(chaine)
-
     df = pd.read_csv('temp_geneupdate.csv',sep=';',index_col=0)
     df = df.dropna(axis=0,subset=['gene_symbol'])
     df = df.rename(index=dict_s_inv)
 
-    X = X.loc[:,df.index]
-    X = X.rename(columns=df['gene_symbol'])
+    Index_duplicate = df[df['gene_symbol'].duplicated(keep=False)].sort_values('gene_symbol',axis=0).index
+    S_duplicate = df.loc[Index_duplicate,'gene_symbol'].sort_values()
+
+    Index_split = df[df.index.duplicated(keep=False)].index
+    Index_split = Index_split.drop_duplicates(keep='first')
+
+    I_keep = remove_duplicates(S_duplicate,X)
+    
+    Index_normal = df.index.difference(Index_duplicate).difference(Index_split)
+    Index_output = Index_normal.append(I_keep)
+
+    X_output = X.loc[X.index,Index_output]
+
+    print(X_output._is_view)
+    X_output = split_genes(df.loc[Index_split,'gene_symbol'],X,X_output)
+
+    for i in df.loc[Index_split,'gene_symbol']:
+
+        if i not in X_output.columns:
+
+            print('DansGame')
+
+    X_output = X_output.rename(columns=df.loc[Index_output,'gene_symbol'])
 
     if filename is not None:
-        X.to_pickle(filename)
+        X_output.to_pickle(filename)
 
-    return X
+    return X_output
+
+
+def split_genes(df,X_input,X_output):
+
+    I = df.index.values
+
+    for i in range(len(I)):
+
+        if df.iloc[i] not in X_output.columns:
+
+            X_output.loc[:,df.iloc[i]] = X_input.loc[:,I[i]]
+
+    return X_output
+
+
+def remove_duplicates(S_dupes,X):
+
+    i = 0
+    liste = [i]
+    last = S_dupes.values[0]
+    for v in S_dupes.values[1:]:
+        if v == last:
+            liste.append(i)
+        else:
+            i += 1
+            last = v
+            liste.append(i)
+
+    df = pd.DataFrame(columns=['gene_symbol','strata'],index=S_dupes.index)
+    df['gene_symbol'] = S_dupes
+
+    Strata = pd.Series(liste,index=S_dupes.index)
+    df['strata'] = Strata
+
+    array_keep = []
+
+    for i,s in enumerate(df['strata'].unique()):
+
+        a_genes = df[df['strata'] == s].index.values
+        array_IQR = np.zeros(len(a_genes))
+
+        for j,g in enumerate(a_genes):
+
+            array_IQR[j] = iqr(X[g])
+
+        array_keep.append(a_genes[np.argmax(array_IQR)])
+        if array_keep[i] == 'A':
+            print(array_keep)
+            print(len(a_genes))
+            print(array_keep[i])
+            print(a_genes)
+            print(array_IQR)
+            print(np.argmax(array_IQR))
+            print(a_genes[np.argmax(array_IQR)])
+
+    array_keep = np.array(array_keep)
+
+    return pd.Index(array_keep)
 
 
 def query_api_epimed(chaine):
