@@ -64,6 +64,32 @@ def X_transcriptome(base,index,standardize=True):
     return X.loc[index]
 
 
+def Get_Index(df,nmois=None):
+
+    if nmois is not None:
+        return Create_Patient_Index_Regression(df)
+    
+    return Create_Patient_Drop_Index_Classification(df,nmois)
+
+
+def Get_Index2(baseList,nmois=None,std=True):
+
+    IndexList = [import_X(b,nmois,std).index for b in baseList]
+    Indexoutput = IndexList[0].append(IndexList[1:])
+
+    return Indexoutput
+
+
+# def X_transcriptome2(base,i,index,standardize=True,normalize=True):
+
+#     X = pd.read_pickle(base + rf'/trscr_{i}'.pkl)
+
+#     if standardize:
+#         preprocessing.scale(X,copy=False)
+
+#     return X.loc[index]
+
+
 def get_function_survival(n_mois):
     return lambda x: 1 if x[-1] == '+' else int((int(x) > n_mois))
 
@@ -143,6 +169,88 @@ def import_val_test_XY_cv_fs(base,id,cv_primary,cv_i,nmois=None,std=True,classif
     return X_fs,X_val,Y_val,X_test,Y_test
 
 
+def generate_XY(base,nmois=None,std=True):
+
+    Clinique_OH = pd.read_pickle(base + r'/clinique_OH.pkl')
+
+    Index = Get_Index(Clinique_OH,nmois)
+
+    X = X_transcriptome(base,Index,std)
+    Y = Y_clinique(base,Index)
+
+    name = 'regression' if nmois is None else f'classification-{nmois}'
+
+    X.to_pickle(base + f'X_{name}.pkl')
+    Y.to_pickle(base + f'Y_{name}.pkl')
+
+
+def generate_XY2(baseDestination,baseList,nmois=None,std=True):
+
+    Index = Get_Index2(baseList,nmois=None,std=True)
+
+    X = X_transcriptome(baseDestination,Index,std)
+    Ylist = [import_Y(b,nmois) for b in baseList]
+    Y = Ylist[0].append(Ylist[1:])
+
+    name = 'regression' if nmois is None else f'classification-{nmois}'
+
+    X.to_pickle(baseDestination + f'X_{name}.pkl')
+    Y.to_pickle(baseDestination + f'Y_{name}.pkl')
+
+
+def add_bases_trscr(baseDestination,baseList,updateList=[],normalize=True):
+
+    for b in updateList:
+
+        T = pd.read_pickle(b + '/trscr.pkl')
+        T = update_genes(T,b + f'/trscr_updated.pkl')
+
+    genesCommon = get_common_index(baseList)
+
+    Tlist = [pd.read_pickle(b + f'/trscr_updated.pkl') for b in baseList]
+
+    if normalize:
+
+        QT = preprocessing.QuantileTransformer(output_distribution='normal')
+
+        for i,T in enumerate(Tlist):
+    
+            QT.fit(T)
+            Tlist[i] = QT.transform(T)
+
+    # Toutput = Tlist[0]
+
+    # for T in Tlist[1:]:
+
+    #     Toutput = Toutput.concat(T,axis=0,join_axes=[])
+
+    Tcommon = pd.concat(Tlist,axis=0,join_axes=[genesCommon])
+
+    Tcommon.to_pickle(baseDestination + '/trscr.pkl')
+
+
+def get_common_index(baseList):
+
+    T = pd.read_pickle(baseList[0] + '/trscr_updated.pkl')
+    genesCommon = T.columns
+
+    for b in baseList[1:]:
+
+        T = pd.read_pickle(b + '/trscr_updated.pkl')
+        genesCommon = genesCommon.intersection(T.columns)
+
+    return genesCommon
+
+
+def select_common_genes(X1,X2):
+
+    genesCommon = X1.columns.intersection(X2.columns)
+    X1c = X1.loc[X1.index,genesCommon]
+    X2c = X2.loc[X2.index,genesCommon]
+
+    return X1c,X2c
+
+
 def update_genes(X,filename=None):
 
     array_s = X.columns.values
@@ -159,11 +267,14 @@ def update_genes(X,filename=None):
 
     chaine = ', '.join(str(e) for e in l)
 
-    df = pd.read_csv('temp_geneupdate.csv',sep=';',index_col=0)
+    f = 'epimed_query.csv'
+    query_api_epimed(chaine,f)
+
+    df = pd.read_csv(f,sep=';',index_col=0)
     df = df.dropna(axis=0,subset=['gene_symbol'])
     df = df.rename(index=dict_s_inv)
 
-    Index_duplicate = df[df['gene_symbol'].duplicated(keep=False)].sort_values('gene_symbol',axis=0).index
+    Index_duplicate = df[df.loc[:,'gene_symbol'].duplicated(keep=False)].sort_values('gene_symbol',axis=0).index
     S_duplicate = df.loc[Index_duplicate,'gene_symbol'].sort_values()
 
     Index_split = df[df.index.duplicated(keep=False)].index
@@ -237,21 +348,13 @@ def remove_duplicates(S_dupes,X):
             array_IQR[j] = iqr(X[g])
 
         array_keep.append(a_genes[np.argmax(array_IQR)])
-        if array_keep[i] == 'A':
-            print(array_keep)
-            print(len(a_genes))
-            print(array_keep[i])
-            print(a_genes)
-            print(array_IQR)
-            print(np.argmax(array_IQR))
-            print(a_genes[np.argmax(array_IQR)])
 
     array_keep = np.array(array_keep)
 
     return pd.Index(array_keep)
 
 
-def query_api_epimed(chaine):
+def query_api_epimed(chaine,filename):
 
     url = 'http://epimed.univ-grenoble-alpes.fr/database/query/'
 
@@ -284,7 +387,7 @@ def query_api_epimed(chaine):
     # r4_d = r4.content.decode('utf-8')
     # csv_r = csv.reader(r4_d.splitlines(), delimiter=',')
 
-    f = open('temp_geneupdate.csv','w')
+    f = open(filename,'w')
     f.write(r4.text)
     f.close()
 

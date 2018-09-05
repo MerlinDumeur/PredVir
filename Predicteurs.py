@@ -31,6 +31,9 @@ def get_name_from_SK_predictor(SKpredictor):
     if name == 'LogR':
         name = name + SKpredictor.get_params()['penalty'][1]
 
+    if name == 'GSCV':
+        return get_name_from_SK_predictor(SKpredictor.get_params()['estimator'])
+
     return name
 
 
@@ -115,7 +118,7 @@ class PredictorCV:
 
     def best_score(self):
 
-        return self.optimizer.best_score_
+        return getattr(self.optimizer,'best_score_')
 
 
 class Predictor:
@@ -186,7 +189,7 @@ class Classifier(Predictor):
             if Xk.shape[1] == 0:
                 grid = grid[:i - len(grid)]
                 break
-            Res = self.feature_relevance(X=Xk,Y=Y,weights=[],metrics=metrics,cv=cv)
+            Res = self.feature_relevance_XY(X=Xk,Y=Y,weights=[],metrics=metrics,cv=cv)
             Res.calculate_m(metrics)
             Res.calculate_v(metrics)
 

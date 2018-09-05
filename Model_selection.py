@@ -137,6 +137,31 @@ class DataSet:
 
         return proc.import_Y(self.base,self.nmois)
 
+    def calc_stats(self,classifieur_fr,classifieur_fs,model):
+
+        DFlist = [pd.read_pickle(get_foldername('model_scoring',self.base,classifieur_fr,classifieur_fs,model) + self.get_filename(id)) for id in self.id_list]
+
+        df = pd.concat(DFlist,axis=0,ignore_index=True)
+
+        # df['average'] = [np.mean(df[c]) for c in df.columns]
+        # df['variance'] = [np.var(df[c]) for c in df.columns]
+
+        for c in df.columns:
+
+            dfc = df[c]
+
+            if len(dfc) > 0:
+
+                dfc = dfc[0]
+
+            try:
+                df.loc['average',c] = np.mean(dfc)
+                # df.loc['variance',c] = np.var(dfc)
+            except TypeError:
+                print('')
+
+        return df
+
 
 class Model:
 
@@ -159,7 +184,6 @@ class Model:
 
         arrays_m = [['Test'] * (len(metrics) + 1),['score',*metrics.keys()]]
         MI2 = pd.MultiIndex.from_arrays(arrays_m)
-        MI_final = MI_final.append(MI2)
         
         param_grid = param[self.predictorCV.param_grid_name]
         # param_namelist = ['param_' + p for p in param_grid.keys()]
@@ -179,13 +203,15 @@ class Model:
             filename = dataSet.get_filename(id)
 
             df_cv = pd.read_pickle(foldername_cv + filename)
-            df_fs = pd.read_pickle(foldername_fs + filename)
+            if use_fs:
+                df_fs = pd.read_pickle(foldername_fs + filename)
 
             df_output = pd.DataFrame(index=np.arange(dataSet.cv_primary.get_n_splits()),columns=MI_final)
 
             for i in range(dataSet.cv_primary.get_n_splits()):
 
-                IndexVal_fs = df_fs[i].loc[X.columns]
+                if use_fs:
+                    IndexVal_fs = df_fs[i].loc[X.columns]
                 IndexVal_cv,IndexTest_cv = get_test_train_indexes(df_cv,i)
 
                 if use_fs:
@@ -209,8 +235,16 @@ class Model:
                 # print(score)
                 # print(vm)
                 # print([score,vm] + [metrics[m](Ytest,self.predictorCV.predict_proba(Xtest),labels=[0,1]) for m in arrays_m[1]])
-                df_output.loc[i,'Test'] = [score] + [metrics[m](Ytest,self.predictorCV.predict_proba(Xtest),labels=[0,1]) for m in arrays_m[1][1:]]
-                df_output.loc[i,'Validation'] = [self.predictorCV.best_score()] + [best_params[k] for k in arrays_p[1][1:]]
+                if len(metrics) == 0:
+                    df_output.loc[i,'Test'] = score
+                else:
+                    df_output.loc[i,'Test'] = [score] + [metrics[m](Ytest,self.predictorCV.predict_proba(Xtest),labels=[0,1]) for m in arrays_m[1][1:]]
+                
+                if len(best_params) == 0:
+                    df_output.loc[i,'Validation'] = self.predictorCV.best_score()
+                else:
+                    df_output.loc[i,'Validation'] = [self.predictorCV.best_score()] + [best_params[k] for k in arrays_p[1][1:]]
+                
                 # else:
                 #     df_output.loc[i,'Validation'] = [self.predictorCV.best_score()] + [best_params[0]]
 
@@ -241,7 +275,7 @@ class FeatureSelector:
         self.metric_fs = metric_fs
         self.smoothing_fs = smoothing_fs
 
-    def select_features(self,X,Y):
+    def select_features(self,X,Y,malus=0.05):
 
         relevance = self.classifieur_fr.feature_relevance_XY(X=X,Y=Y,metrics={},weights=[self.weight_fr],cv=self.cv_fr)
         relevance.stat_percentage()
@@ -252,7 +286,7 @@ class FeatureSelector:
         graph = {'abscisse':x,'moyenne':moy,'std':std}
 
         moy_smooth = self.smoothing_fs(moy)
-        compare = x[np.argmin(moy_smooth)] * np.ones(len(percentage))
+        compare = (x[np.argmin(moy_smooth)] - malus) * np.ones(len(percentage))
         Index_bool = np.greater(percentage,compare)
 
         return Index_bool,graph
@@ -260,6 +294,7 @@ class FeatureSelector:
     def generate_featureselection(self,dataSet,save_graph=False,**kwargs):
 
         replace = kwargs.get('replace',False)
+        malus = kwargs.get('malus',0.05)
 
         foldername_input,foldername_output = get_foldername('FS+CV',dataSet.base,self.classifieur_fr,self.classifieur_fs)
 
@@ -298,7 +333,7 @@ class FeatureSelector:
                 Xtrain = X.loc[IndexTrain]
                 Ytrain = Y.loc[IndexTrain]
 
-                I,graph = self.select_features(X=Xtrain,Y=Ytrain)
+                I,graph = self.select_features(X=Xtrain,Y=Ytrain,malus=malus)
 
                 output[i] = I
 
@@ -312,3 +347,48 @@ class FeatureSelector:
         if save_graph:
             with open(foldername_output + f'Graph.pkl', 'wb') as fp:
                 pickle.dump(graph_dict,fp,protocol=pickle.HIGHEST_PROTOCOL)
+
+    def select_features2(self,X,Y,keep):
+
+        relevance = self.classifieur_fr.feature_relevance_XY(X=X,Y=Y,metrics={},weights=[self.weight_fr],cv=self.cv_fr)
+        relevance.stat_percentage()
+        percentage = relevance.data[self.weight_fr].loc['percentage']
+
+        p2 = percentage.sort_values(ascending=False)[keep]
+
+        compare = p2 * np.ones(len(percentage))
+        Index_bool = np.greater(percentage,compare)
+
+        return Index_bool
+
+    def generate_fs2(self,dataSet,keep=1000):
+
+        foldername_input,foldername_output = get_foldername('FS+CV',dataSet.base,self.classifieur_fr,self.classifieur_fs)
+
+        os.makedirs(os.path.dirname(foldername_output), exist_ok=True)
+
+        for id in dataSet.id_list:
+
+            print(id)
+
+            filename = dataSet.get_filename(id)
+
+            df_cv = pd.read_pickle(foldername_input + filename)
+
+            X = dataSet.import_X()
+            Y = dataSet.import_Y()
+
+            output = pd.DataFrame(index=X.columns,columns=np.arange(dataSet.cv_primary.get_n_splits()))
+
+            for i in range(dataSet.cv_primary.get_n_splits()):
+
+                IndexTrain,IndexTest = get_test_train_indexes(df_cv,i)
+
+                Xtrain = X.loc[IndexTrain]
+                Ytrain = Y.loc[IndexTrain]
+
+                I = self.select_features2(X=Xtrain,Y=Ytrain,keep=keep)
+
+                output[i] = I
+
+            output.to_pickle(foldername_output + filename)
