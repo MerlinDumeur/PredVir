@@ -57,4 +57,4 @@ class CV_FILE:
 
     def generate_file(dataset,nmois,CV,cv_args):
 
-        X = 
+        X = 'Regression' if n is None else f'{n}nmois'

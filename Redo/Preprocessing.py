@@ -32,7 +32,7 @@ class Preprocesser:
             X = self.XpG.loc[index_n]
             Y = create_Y(index_regression,n)
 
-            folder = 'Regression' if n is None else f'{nmois}nmois'
+            folder = 'Regression' if n is None else f'{n}nmois'
 
             X.to_pickle(self.base + rf'/{folder}/X.pkl')
             Y.to_pickle(self.base + rf'/{folder}/Y.pkl')
