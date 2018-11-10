@@ -5,7 +5,7 @@
 *.key
 *.pem
 __pycache__/
-.sublime-workspace
+*.sublime-workspace
 .ipynb_checkpoints/*
 *.pkl
 *.csv*

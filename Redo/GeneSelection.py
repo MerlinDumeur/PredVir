@@ -1,3 +1,6 @@
+import Model
+
+
 class GeneSelector:
 
     def __init__(self,model):
@@ -19,7 +22,12 @@ class GeneSelector_GLM(GeneSelector):
 
         return index_keep
 
+
 class GeneSelectorFile:
+
+    def from_CVFILE(cvfile,model):
+
+        return GeneSelectorFile(cvfile.filename + Model.get_modelhash(model) + '.pkl')
 
     def __init__(self,filename):
 
@@ -27,4 +35,17 @@ class GeneSelectorFile:
 
     def select_genes(self,i):
 
-        return self.df.loc[:,i]
+        idx = self.df.loc[:,i]
+        return self.df.loc[idx].index
+
+    def generate_file(dataset,cvfile,geneselector):
+
+        df = pd.DataFrame(index=dataset.X.columns)
+
+        for i,Xtrain,Ytrain,Xtest,Ytest in enumerate(dataset.split(cvfile)):
+
+            idkeep = geneselector.select_genes(Xtrain,Ytrain)
+            df.loc[:,i] = 0
+            df.loc[idkeep,i] = 1
+
+        df.to_pickle(cvfile.filename + Model.get_modelhash(geneselector.model) + '.pkl')

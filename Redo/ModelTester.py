@@ -1,5 +1,6 @@
 import GeneSelection
 
+
 class ModelTester:
 
     def __init__(self,model):
@@ -8,14 +9,16 @@ class ModelTester:
 
         self.model = model
 
-    def test_score(self,X,Y,cv_primary,geneSelector,metrics={},strata=None,save=None):
+    def test_score(self,ds,cv_primary,geneSelector,metrics={},strata=None,save=None):
+
+        X, Y = ds.X, ds.Y
 
         MI = pd.MultiIndex.from_arrays([['general'],['fs_size']])
         
-        arrays_m = [['Test'] * (len(metrics) + 1),['score',*metrics.keys()]]
+        arrays_m = [['Test'] * (len(metrics) + 1),['score',*metrics]]
         MI2 = pd.MultiIndex.from_arrays(arrays_m)
 
-        param_grid = param[self.predictorCV.param_grid_name]
+        param_grid = self.model.param_grid
         arrays_p = [['Validation'] * (len(param_grid) + 1),['score',*param_grid]]
         MI3 = pd.MultiIndex.from_arrays(arrays_p)
         
@@ -23,9 +26,9 @@ class ModelTester:
         MI_final = MI_final.append(MI2)
         MI_final = MI_final.append(MI3)
 
-        df_output = pd.DataFrame(index=np.arange(dataSet.cv_primary.get_n_splits()),columns=MI_final)
+        df_output = pd.DataFrame(index=np.arange(cv_primary.get_n_splits()),columns=MI_final)
 
-        for i,train_index,test_index in enumerate(CV.split(X,strata)):
+        for i,Xtrain,Ytrain,Xtest,Ytest in enumerate(ds.CV_split(cv_primary,strata)):
 
             if issubclass(geneSelector.__class__,GeneSelection.GeneSelector):
 
@@ -35,18 +38,18 @@ class ModelTester:
 
                 index_genes = geneSelector.select_genes(i)
 
-            Xtrain = X.loc[train_index,index_genes]
-            Ytrain = Y.loc[train_index,index_genes]
+            Xtrain = Xtrain.loc[:,index_genes]
+            Ytrain = Ytrain.loc[:,index_genes]
 
-            Xtest = X.loc[test_index,index_genes]
-            Ytest = Y.loc[test_index,index_genes]
+            Xtest = Xtest.loc[:,index_genes]
+            Ytest = Ytest.loc[:,index_genes]
 
             self.model.fit(Xtrain,Ytrain)
 
             best_params = self.model.best_params()
             score = self.predictorCV.score(Xtest,Ytest)
 
-            df_output.loc[i,'general'] = Xval.shape[1]
+            df_output.loc[i,'general'] = Xtrain.shape[1]
 
             if len(metrics) == 0:
                 df_output.loc[i,'Test'] = score

@@ -1,6 +1,6 @@
 from sklearn.metrics import log_loss,make_scorer,get_scorer
 from sklearn.model_selection import RepeatedKFold,KFold,GridSearchCV,RandomizedSearchCV
-from sklearn.linear_model import LinearRegression, LogisticRegression,Lasso,Ridge
+from sklearn.linear_model import LinearRegression, LogisticRevgression,Lasso,Ridge
 import Traitement as proc
 import Predicteurs as cl
 import pandas as pd
