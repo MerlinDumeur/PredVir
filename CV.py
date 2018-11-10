@@ -49,10 +49,10 @@ class CV_FILE:
         self.filename = filename
         self.df = pd.read_pickle(filename)
 
-    def from_args(base,nmois,CV,cv_args):
+    def from_args(base,nmois,cv,cv_args):
 
         foldername = Dataset.get_foldername(base,nmois)
-        filename = CV_FILE.generate_filename_CV(CV,cv_args)
+        filename = CV_FILE.generate_filename_CV(cv,cv_args)
         return CV_FILE(foldername + filename + '.pkl')
 
     def split(self,end=None,**kwargs):
@@ -68,22 +68,20 @@ class CV_FILE:
 
             yield (idx_train,idx_test)
 
-    def generate_file(dataset,nmois,CV,cv_args,strata=None):
+    def generate_file(dataset,nmois,cv,cv_args,strata=None):
 
-        cv = CV(**cv_args)
+        cv = cv(**cv_args)
         df = pd.DataFrame(index=dataset.X.index,columns=np.arange(cv.get_n_splits()))
-        
-        cvs = enumerate(cv.split(dataset.X,strata)) if strata is not None else enumerate(cv.split(dataset.X))
 
-        for i,train_index,test_index in cvs:
+        for i,train_index,test_index in enumerate(cv.split(dataset.X,strata)):
 
                 df.loc[:,i] = 0
                 df.loc[train_index,i] = 1
 
-        df.to_pickle(CV_FILE.generate_filename_CV(CV,cv_args) + '.pkl')
+        df.to_pickle(CV_FILE.generate_filename_CV(cv,cv_args) + '.pkl')
 
-    def generate_filename_CV(CV,cv_args):
+    def generate_filename_CV(cv,cv_args):
 
-        argslist = CV.__code__.varnames.sort()
-        filename = f"{CV.__name__}" + str.join([f"-{{{k}}}" for k in argslist]).format(**cv_args)
+        argslist = cv.__code__.varnames.sort()
+        filename = f"{cv.__class__.__name__}" + str.join([f"-{{{k}}}" for k in argslist]).format(**cv_args)
         return filename

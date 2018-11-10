@@ -11,12 +11,7 @@ class Dataset:
 
     def CV_split(self,CV,strata=None):
 
-        if strata is not None:
-            cvs = CV.split(self.X,strata=strata)
-        else:
-            cvs = CV.split(self.X)
-
-        for train_index,test_index in cvs:
+        for train_index,test_index in CV.split(self.X,strata):
 
             Xtrain = self.X.loc[train_index]
             Ytrain = self.Y.loc[train_index]

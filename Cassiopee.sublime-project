@@ -19,7 +19,7 @@
 			[
 				""
 			],
-			"name": "Old",
+			"name": "New",
 			"path": "."
 		},
 		{
@@ -27,8 +27,8 @@
 			[
 				"*.py"
 			],
-			"name": "New",
-			"path": "Redo/"
+			"name": "Old",
+			"path": "Old/"
 		}
 	],
 	"settings":

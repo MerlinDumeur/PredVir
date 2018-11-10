@@ -25,7 +25,7 @@ class Preprocesser:
 
             preprocessing.scale(self.XpG,copy=False)
 
-        for n in [None, *nmonths_list]:
+        for n in nmonths_list:
 
             index = Preprocesser.index(self.XpG,n)
 
@@ -43,7 +43,7 @@ class Preprocesser:
         self.XpG.rename(index=str,columns=rename,inplace=True)
         self.XpG.dropna(axis=0,subset=dropna_col,inplace=True)
         self.XpG.set_index(Constants.ID,inplace=True)
-c
+
     def process_Trscr(self,transpose):
 
         self.Trscr = pd.read_csv(self.base + Constants.DATA_FILEPATH)

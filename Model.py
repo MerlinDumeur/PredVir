@@ -5,6 +5,14 @@ def get_modelhash(model):
 
     return hash(json.dumps(model.get_params(), sort_keys=True))
 
+
+class Model:
+
+    def __init__(self,model,name):
+
+        self.model = model
+        self.name = name
+
 # class ModelTester:
 
 #     def __init__(self,model):

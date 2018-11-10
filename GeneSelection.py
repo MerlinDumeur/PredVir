@@ -17,7 +17,15 @@ class GeneSelector_GLM(GeneSelector):
     def select_genes(self,X,Y):
 
         self.model.fit(X,Y)
-        coef = self.model.coef_
+
+        if 'CV' in self.model.__class__.__name__:
+
+            coef = self.model.best_estimator.coef_
+
+        else:
+
+            coef = self.model.coef_
+
         index_keep = np.greater(coef,np.zeros(len(coef)))
 
         return index_keep
