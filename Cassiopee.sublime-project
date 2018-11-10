@@ -1,0 +1,21 @@
+{
+	"folders":
+	[
+		{
+			"path": ".",
+			"name":"Old",
+			"file_include_patterns":["*.py"],
+			"folder_exclude_patterns":[""]
+		},
+		{
+			"path": "Redo/",
+			"name":"New",
+			"file_include_patterns":["*.py"],
+		}
+	],
+	"settings":
+    {
+        "tab_size": 4
+    },
+    
+}
