@@ -11,7 +11,9 @@ class Dataset:
 
     def CV_split(self,CV,strata=None):
 
-        for train_index,test_index in CV.split(self.X,strata):
+        end = None
+
+        for train_index,test_index in CV.split(self.X,strata,end=end):
 
             Xtrain = self.X.loc[train_index]
             Ytrain = self.Y.loc[train_index]
@@ -31,4 +33,4 @@ class Dataset:
 
     def get_foldername(base,nmois):
 
-        return base + Constants.FOLDERPATH.format(base=base,nmois=str(nmois) if nmois is not None else 'R')
+        return Constants.FOLDERPATH.format(base=base,nmois=str(nmois) if nmois is not None else 'R')

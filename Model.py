@@ -1,9 +1,36 @@
 import json
+import CV
 
 
 def get_modelhash(model):
 
-    return hash(json.dumps(model.get_params(), sort_keys=True))
+    params = model.get_params()
+    ser_cv = CV.CV_FILE.serialize_CV(params['cv'])
+    ser_model = Model.serialize_model(params['estimator'])
+
+    # params['cv'] = params['cv'].__class__.__name__
+    
+    for k,v in ser_cv.items():
+    
+        # print(k)
+        params[k + '_cv'] = v
+
+    for k,v in ser_model.items():
+
+        params[k + '_model'] = v
+
+    for k,v in params['param_grid'].items():
+
+        # v.flags.writeable = False
+        params['param_grid'][k] = hash(v.tobytes())
+        # v.flags.writeable = True
+
+    del params['cv']
+    del params['estimator']
+    
+    # print(params)
+    
+    return hash(json.dumps(params, sort_keys=True))
 
 
 class Model:
@@ -12,6 +39,12 @@ class Model:
 
         self.model = model
         self.name = name
+
+    def serialize_model(model):
+
+        # argsvalues = {{k:getattr(cv_instance,k) for k in ['random_state',*Constants.CV_DICT_KF[cv_instance.__class__.__name__]] if k != "n_splits"}}
+        # print(model.get_params())
+        return model.get_params()
 
 # class ModelTester:
 

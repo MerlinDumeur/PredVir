@@ -28,7 +28,7 @@ class ModelTester:
 
         df_output = pd.DataFrame(index=np.arange(cv_primary.get_n_splits()),columns=MI_final)
 
-        for i,Xtrain,Ytrain,Xtest,Ytest in enumerate(ds.CV_split(cv_primary,strata)):
+        for i,(Xtrain,Ytrain,Xtest,Ytest) in enumerate(ds.CV_split(cv_primary,strata)):
 
             if issubclass(geneSelector.__class__,GeneSelection.GeneSelector):
 

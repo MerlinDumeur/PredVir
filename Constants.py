@@ -14,3 +14,12 @@ PLT_FILEPATH = '/platform.csv'
 FOLDERPATH = '{base}/{nmois}/'
 FILENAME_X = 'X.pkl'
 FILENAME_Y = 'Y.pkl'
+
+CV_DICT_KF = {
+    
+    'KFold':['shuffle'],
+    'RepeatedKFold':['n_repeats'],
+    'StratifiedKFold':['shuffle'],
+    'RepeatedStratifiedKFold':['n_repeats']
+
+}

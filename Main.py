@@ -6,35 +6,38 @@ import GeneSelection
 import ModelTester
 import Model
 
-from sklearn.model_selection import GridSearchCV, KFold,RepeatedStratifiedKFold, log_loss,roc_auc_score
+import numpy as np
+
+from sklearn.metrics import log_loss,roc_auc_score
+from sklearn.model_selection import GridSearchCV, KFold,RepeatedStratifiedKFold
 from sklearn.linear_model import LogisticRegression
 
 base = "epilung2"
 
 # On traite les données brutes pour l'apprentissage
 
-Pr = Preprocessing(base)
+Pr = Preprocessing.Preprocesser(base)
 
-keep_XpG = ['id_sample','sex','age_min','age_max','id_topology','id_topology_group','id_morphology','id_pathology','t','n','m','tnm_stage','dfs_months','os_months','relapsed','dead','treatment','exposure','index_histology_code','efs','os','lof_gof']
-rename_XpG = {"id_sample":Constants.ID,"age_min":Constants.AGE,"index_histology_code":Constants.HISTOLOGY,'os':Constants.OS,"id_pathology":Constants.PATHOLOGY,'efs':Constants.EFS,'dead':Constants.DEAD}
+# keep_XpG = ['id_sample','sex','age_min','age_max','id_topology','id_topology_group','id_morphology','id_pathology','t','n','m','tnm_stage','dfs_months','os_months','relapsed','dead','treatment','exposure','index_histology_code','efs','os','lof_gof']
+# rename_XpG = {"id_sample":Constants.ID,"age_min":Constants.AGE,"index_histology_code":Constants.HISTOLOGY,'os':Constants.OS,"id_pathology":Constants.PATHOLOGY,'efs':Constants.EFS,'dead':Constants.DEAD}
 dropna_XpG = [Constants.HISTOLOGY,Constants.PATHOLOGY]
 
-keep_Plt = ['ID','GB_ACC','Gene Symbol','ENTREZ_GENE_ID','RefSeq Transcript ID']
-rename_Plt = {'ID':Constants.ID}
-dtype_Plt = {'SPOT_ID':str}
+# keep_Plt = ['ID','GB_ACC','Gene Symbol','ENTREZ_GENE_ID','RefSeq Transcript ID']
+# rename_Plt = {'ID':Constants.ID}
+# dtype_Plt = {'SPOT_ID':str}
 
-Pr.load_files(keep_XpG=keep_XpG,rename_XpG=rename_XpG,dropna_XpG=dropna_XpG,transpose_Trscr=True,keep_Plt=keep_Plt,rename_Plt=rename_Plt,dtype_Plt=dtype_Plt,remove_ctrl_Plt=True)
+# Pr.load_files(keep_XpG=keep_XpG,rename_XpG=rename_XpG,dropna_XpG=dropna_XpG,transpose_Trscr=True,keep_Plt=keep_Plt,rename_Plt=rename_Plt,dtype_Plt=dtype_Plt,remove_ctrl_Plt=True)
 
-nmlist = [None,6,12,60]
+# nmlist = [None,6,12,60]
 
-Pr.generate_XY(nmonths_list=nmlist,standardize=False)
+# Pr.generate_XY(nmonths_list=nmlist,standardize=False)
 
 # On choisit les paramètres avec lesquels on travaille
 
 seed = 45
 
 nmois = 6
-ds = Dataset(base,nmois)
+ds = Dataset.Dataset(base,nmois)
 
 cv = KFold
 cv_args = {'n_splits':5,'random_state':seed}
@@ -54,13 +57,13 @@ LogisticRegression_Cdict = np.logspace(-3,3,6)
 LR_grid = {'C':LogisticRegression_Cdict}
 
 LogR1 = LogisticRegression(penalty='l1')
-LogR1_cv = GridSearchCV(LogR1,LR_grid,scoring=geneSelector_metric,cv=geneSelector_cv,n_jobs=-1)
+LogR1_cv = GridSearchCV(LogR1,LR_grid,scoring=geneSelector_metric,cv=geneSelector_cv)
 
 GS = GeneSelection.GeneSelector_GLM(LogR1_cv)
 
 # On genere les fichiers CV et Geneselction
 
-CV.CV_FILE.generate_file(ds,nmois,cv_primary,cv_primary_args,strata=None)
+# CV.CV_FILE.generate_file(ds,nmois,cv_primary,cv_primary_args,strata=ds.Y)
 cvfile = CV.CV_FILE.from_args(base,nmois,cv_primary,cv_primary_args)
 
 GeneSelection.GeneSelectorFile.generate_file(ds,cvfile,GS)

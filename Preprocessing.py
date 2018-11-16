@@ -1,6 +1,8 @@
 import pandas as pd
 import Constants
 from sklearn import preprocessing
+import os
+import numpy as np
 
 
 class Preprocesser:
@@ -9,9 +11,9 @@ class Preprocesser:
 
         self.base = base
 
-    def load_files(self,keep_XpG=[],rename_XpG={},dropna_XPG=[],dtype_XpG={},transpose_Trscr=False,keep_Plt=[],rename_Plt={},dtype_Plt={},remove_ctrl_Plt=False):
+    def load_files(self,keep_XpG=[],rename_XpG={},dropna_XpG=[],dtype_XpG={},transpose_Trscr=False,keep_Plt=[],rename_Plt={},dtype_Plt={},remove_ctrl_Plt=False):
 
-        self.process_XpG(keep_XpG,rename_XpG,dropna_XPG,dtype_XpG)
+        self.process_XpG(keep_XpG,rename_XpG,dropna_XpG,dtype_XpG)
         self.process_Trscr(transpose_Trscr)
         self.process_Plt(keep_Plt,rename_Plt,dtype_Plt,remove_ctrl_Plt)
 
@@ -29,24 +31,27 @@ class Preprocesser:
 
             index = Preprocesser.index(self.XpG,n)
 
-            X = self.XpG.loc[index]
+            X = self.Trscr.loc[index]
             Y = self.create_Y(index,n)
 
-            folder = self.base + Constants.FOLDERPATH.format(base=self.base,nmois=(f'{n}' if n is not None else 'R'))
+            folder = Constants.FOLDERPATH.format(base=self.base,nmois=(f'{n}' if n is not None else 'R'))
+
+            if not os.path.exists(folder):
+                os.makedirs(folder)
 
             X.to_pickle(folder + Constants.FILENAME_X)
             Y.to_pickle(folder + Constants.FILENAME_Y)
 
     def process_XpG(self,keep,rename,dropna_col,dtype):
 
-        self.XpG = pd.read_csv(self.base + Constants.XPG_FILEPATH,usecols=keep,dtypes=dtype)
+        self.XpG = pd.read_csv(self.base + Constants.XPG_FILEPATH,usecols=keep,dtype=dtype,low_memory=False)
         self.XpG.rename(index=str,columns=rename,inplace=True)
         self.XpG.dropna(axis=0,subset=dropna_col,inplace=True)
         self.XpG.set_index(Constants.ID,inplace=True)
 
     def process_Trscr(self,transpose):
 
-        self.Trscr = pd.read_csv(self.base + Constants.DATA_FILEPATH)
+        self.Trscr = pd.read_csv(self.base + Constants.DATA_FILEPATH,low_memory=False)
 
         if transpose:
 
@@ -54,7 +59,7 @@ class Preprocesser:
 
     def process_Plt(self,keep,rename,dtype,remove_control):
 
-        self.Plt = pd.read_csv(self.base + Constants.PLT_FILEPATH)
+        self.Plt = pd.read_csv(self.base + Constants.PLT_FILEPATH,low_memory=False)
 
         if remove_control:
 
