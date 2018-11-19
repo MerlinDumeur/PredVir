@@ -10,3 +10,5 @@ __pycache__/
 *.pkl
 *.csv*
 *.png
+keys/*
+Exclude-rsync.txt
