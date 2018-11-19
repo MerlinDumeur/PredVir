@@ -5,11 +5,10 @@ import CV
 import GeneSelection
 import ModelTester
 import Model
-import sys
 
 import numpy as np
 
-from sklearn.metrics import log_loss,roc_auc_score
+from sklearn.metrics import log_loss,roc_auc_score, make_scorer
 from sklearn.model_selection import GridSearchCV, KFold,RepeatedStratifiedKFold
 from sklearn.linear_model import LogisticRegression
 
@@ -43,10 +42,12 @@ ds = Dataset.Dataset(base,nmois)
 cv = KFold
 cv_args = {'n_splits':5,'random_state':seed}
 
-geneSelector_metric = 'neg_log_loss'
+# geneSelector_metric = 'neg_log_loss'
+geneSelector_metric = make_scorer(log_loss,greater_is_better=False,needs_proba=True,labels=[0,1])
 geneSelector_cv = cv(**cv_args)
 
-modelscv_scoring = 'neg_log_loss'
+# modelscv_scoring = 'neg_log_loss'
+modelscv_scoring = make_scorer(log_loss,greater_is_better=False,needs_proba=True,labels=[0,1])
 models_cv = cv(**cv_args)
 
 cv_primary = RepeatedStratifiedKFold
@@ -72,7 +73,7 @@ GS = GeneSelection.GeneSelector_GLM(LogR1_cv)
 # CV.CV_FILE.generate_file(ds,nmois,cv_primary,cv_primary_args,strata=ds.Y)
 cvfile = CV.CV_FILE.from_args(base,nmois,cv_primary,cv_primary_args)
 
-GeneSelection.GeneSelectorFile.generate_file(ds,cvfile,GS)
+# GeneSelection.GeneSelectorFile.generate_file(ds,cvfile,GS)
 gsfile = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,GS)
 
 # On créée nos modèles
@@ -80,7 +81,7 @@ gsfile = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,GS)
 LR_grid = {'C':LogisticRegression_Cdict}
 
 LR2 = LogisticRegression()
-LR2_CV = Model(GridSearchCV(LR2,LR_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1),'LR2')
+LR2_CV = Model.Model(GridSearchCV(LR2,LR_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1),'LR2')
 
 models_list = [LR2_CV]
 

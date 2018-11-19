@@ -83,13 +83,13 @@ class Preprocesser:
             return Preprocesser.index_regression(df)
 
     def index_regression(df):
-        
+
         return df.loc[:,Constants.DEAD].index.values
 
     def index_classification(df,n_mois):
-    
-        I = [(k[-1] == '+' and int(k[:-1]) < n_mois) for k in df[Constants.OS].values]
-        return np.setdiff1d(df.index.values,I)
+
+        Idx = [(k[-1] == '+' and int(k[:-1]) < n_mois) for k in df[Constants.OS].values]
+        return np.setdiff1d(df.index.values,Idx)
 
     def create_Y(self,index,n=None):
 

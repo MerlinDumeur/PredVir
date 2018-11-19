@@ -19,6 +19,9 @@ class GeneSelector_GLM(GeneSelector):
 
     def select_genes(self,X,Y):
 
+        # print(X)
+        # print(Y)
+
         self.model.fit(X,Y)
 
         if 'CV' in self.model.__class__.__name__:

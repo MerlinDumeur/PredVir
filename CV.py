@@ -20,7 +20,7 @@ class CV:
 
 
 type_dict = {
-    
+
     'KFold':KFold,
     'RepeatedKFold':RepeatedKFold,
     'StratifiedKFold':StratifiedKFold
@@ -51,6 +51,10 @@ class CV_FILE:
 
         self.filename = filename
         self.df = pd.read_pickle(filename)
+
+    def get_n_splits(self):
+
+        return len(self.df.columns)
 
     def from_args(base,nmois,cv,cv_args):
 
@@ -92,7 +96,7 @@ class CV_FILE:
             argsvalues = CV_FILE.serialize_CV(cv_instance)
             argslist = [*argsvalues]
             argslist.sort()
-            
+
             strlist = [f"{{{k}}}" for k in argslist]
             filename = f"{cv.__name__}" + '-' + "-".join(strlist).format(**argsvalues)
 
@@ -100,7 +104,7 @@ class CV_FILE:
 
             argslist = cv.__code__.varnames.sort()
             filename = f"{cv.__class__.__name__}" + "".join([f"-{{{k}}}" for k in argslist]).format(**cv_args)
-        
+
         return filename
 
     def serialize_CV(cv_instance):
