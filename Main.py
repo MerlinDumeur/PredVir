@@ -5,6 +5,7 @@ import CV
 import GeneSelection
 import ModelTester
 import Model
+import sys
 
 import numpy as np
 
@@ -60,6 +61,11 @@ LogR1 = LogisticRegression(penalty='l1')
 LogR1_cv = GridSearchCV(LogR1,LR_grid,scoring=geneSelector_metric,cv=geneSelector_cv)
 
 GS = GeneSelection.GeneSelector_GLM(LogR1_cv)
+
+# print(zlib.compressobj(LogR1_cv))
+# print(zlib.adler32(LogR1_cv))
+
+# sys.exit()
 
 # On genere les fichiers CV et Geneselction
 

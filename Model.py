@@ -1,5 +1,6 @@
 import json
 import CV
+import zlib
 
 
 def get_modelhash(model):
@@ -22,7 +23,7 @@ def get_modelhash(model):
     for k,v in params['param_grid'].items():
 
         # v.flags.writeable = False
-        params['param_grid'][k] = hash(v.tobytes())
+        params['param_grid'][k] = zlib.adler32(v.tobytes())
         # v.flags.writeable = True
 
     del params['cv']
@@ -30,7 +31,7 @@ def get_modelhash(model):
     
     # print(params)
     
-    return hash(json.dumps(params, sort_keys=True))
+    return zlib.adler32(bytes(json.dumps(params, sort_keys=True),'utf-8'))
 
 
 class Model:
