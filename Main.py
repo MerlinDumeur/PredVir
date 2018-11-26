@@ -43,11 +43,11 @@ ds = Dataset.Dataset(base,nmois)
 cv = KFold
 cv_args = {'n_splits':5,'random_state':seed}
 
-geneSelector_metric = 'neg_log_loss'
+# geneSelector_metric = 'neg_log_loss'
 geneSelector_metric = make_scorer(log_loss,greater_is_better=False,needs_proba=True,labels=[0,1])
 geneSelector_cv = cv(**cv_args)
 
-modelscv_scoring = 'neg_log_loss'
+# modelscv_scoring = 'neg_log_loss'
 modelscv_scoring = make_scorer(log_loss,greater_is_better=False,needs_proba=True,labels=[0,1])
 models_cv = cv(**cv_args)
 
@@ -74,7 +74,7 @@ GS = GeneSelection.GeneSelector_GLM(LogR1_cv)
 # CV.CV_FILE.generate_file(ds,nmois,cv_primary,cv_primary_args,strata=ds.Y)
 cvfile = CV.CV_FILE.from_args(base,nmois,cv_primary,cv_primary_args)
 
-GeneSelection.GeneSelectorFile.generate_file(ds,cvfile,GS)
+# GeneSelection.GeneSelectorFile.generate_file(ds,cvfile,GS)
 gsfile = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,GS)
 
 
