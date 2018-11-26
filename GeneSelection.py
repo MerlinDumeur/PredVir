@@ -19,6 +19,9 @@ class GeneSelector_GLM(GeneSelector):
 
     def select_genes(self,X,Y):
 
+        # print(X)
+        # print(Y)
+
         self.model.fit(X,Y)
 
         if 'CV' in self.model.__class__.__name__:
@@ -51,7 +54,10 @@ class GeneSelectorFile:
     def select_genes(self,i):
 
         idx = self.df.loc[:,i]
-        return self.df.loc[idx].index
+        # print(idx)
+        # print(idx.shape)
+        # print(self.df.loc[idx].values.shape)
+        return (idx==1).values
 
     def generate_file(dataset,cvfile,geneselector):
 

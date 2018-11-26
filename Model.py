@@ -10,9 +10,9 @@ def get_modelhash(model):
     ser_model = Model.serialize_model(params['estimator'])
 
     # params['cv'] = params['cv'].__class__.__name__
-    
+
     for k,v in ser_cv.items():
-    
+
         # print(k)
         params[k + '_cv'] = v
 
@@ -23,14 +23,33 @@ def get_modelhash(model):
     for k,v in params['param_grid'].items():
 
         # v.flags.writeable = False
-        params['param_grid'][k] = zlib.adler32(v.tobytes())
+        try:
+
+            params['param_grid'][k] = zlib.adler32(v.tobytes())
+
+        except AttributeError:
+
+            params['param_grid'][k] = v
+
         # v.flags.writeable = True
+
+    if params['scoring'].__class__.__name__ == '_ProbaScorer':
+
+        # print(params['scoring']._score_func.__name__)
+        params['scoring'] = params['scoring']._score_func.__name__
+
+    else:
+
+        raise(ValueError('Scoring method not supported'))
 
     del params['cv']
     del params['estimator']
-    
+
     # print(params)
-    
+    # print(params['scoring'].__class__.__name__)
+
+    # print(params)
+
     return zlib.adler32(bytes(json.dumps(params, sort_keys=True),'utf-8'))
 
 
@@ -58,14 +77,14 @@ class Model:
 #     def test_score(self,X,Y,cv_primary,metrics={},strata=None,save=None):
 
 #         MI = pd.MultiIndex.from_arrays([['general'],['fs_size']])
-        
+
 #         arrays_m = [['Test'] * (len(metrics) + 1),['score',*metrics.keys()]]
 #         MI2 = pd.MultiIndex.from_arrays(arrays_m)
 
 #         param_grid = param[self.predictorCV.param_grid_name]
 #         arrays_p = [['Validation'] * (len(param_grid) + 1),['score',*param_grid]]
 #         MI3 = pd.MultiIndex.from_arrays(arrays_p)
-        
+
 #         MI_final = MI.copy()
 #         MI_final = MI_final.append(MI2)
 #         MI_final = MI_final.append(MI3)
@@ -91,7 +110,7 @@ class Model:
 #                 df_output.loc[i,'Test'] = score
 #             else:
 #                 df_output.loc[i,'Test'] = [score] + [metrics[m](Ytest,self.predictorCV.predict_proba(Xtest),labels=[0,1]) for m in arrays_m[1][1:]]
-            
+
 #             if len(best_params) == 0:
 #                 df_output.loc[i,'Validation'] = self.predictorCV.best_score()
 #             else:
