@@ -1,4 +1,5 @@
 import GeneSelection
+import Constants
 
 import pandas as pd
 import numpy as np
@@ -12,7 +13,7 @@ class ModelTester:
 
         self.model = model
 
-    def test_score(self,ds,cv_primary,geneSelector,metrics={},strata=None,save=None):
+    def test_score(self,ds,cv_primary,geneSelector,metrics={},strata=None,save=None,kernel=False):
 
         X, Y = ds.X, ds.Y
 
@@ -44,6 +45,11 @@ class ModelTester:
             Xtrain = Xtrain.loc[:,index_genes]
             Xtest = Xtest.loc[:,index_genes]
 
+            if kernel:
+
+                Xtest = self.model.kernel.compute(Xtrain,Xtest)
+                Xtrain = self.model.kernel.compute(Xtrain,Xtrain)
+
             self.model.fit(Xtrain,Ytrain)
 
             best_params = self.model.best_params_
@@ -56,8 +62,8 @@ class ModelTester:
             else:
                 # print(Ytest.shape)
                 # print(self.model.predict_proba(Xtest).shape)
-
-                df_output.loc[i,'Test'] = [score] + [metrics[m](Ytest,self.model.predict_proba(Xtest)[:,1]) for m in arrays_m[1][1:]]
+                # print(metrics['accuracy'](Ytest,self.model.predict(Xtest)))
+                df_output.loc[i,'Test'] = [score] + [metrics[m](Ytest,self.model.predict_proba(Xtest)[:,1]) if metrics[m].__name__ not in Constants.no_proba_list else metrics[m](Ytest,self.model.predict(Xtest)) for m in arrays_m[1][1:]]
 
             if len(best_params) == 0:
                 df_output.loc[i,'Validation'] = self.model.best_score_

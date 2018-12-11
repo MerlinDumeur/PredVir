@@ -1,5 +1,3 @@
-import Model
-
 import pandas as pd
 import numpy as np
 
@@ -24,7 +22,7 @@ class GeneSelector_GLM(GeneSelector):
 
         self.model.fit(X,Y)
 
-        if 'CV' in self.model.__class__.__name__:
+        if 'CV' in self.model.model.__class__.__name__:
 
             coef = self.model.best_estimator_.coef_
 
@@ -38,17 +36,19 @@ class GeneSelector_GLM(GeneSelector):
 
     def serialize(self):
 
-        return Model.get_modelhash(self.model)
+        return self.model.get_modelhash()
 
 
 class GeneSelectorFile:
 
-    def from_CVFILE(cvfile,GS):
+    def from_CVFILE(cvfile,GS,passthrough=False):
 
-        return GeneSelectorFile(cvfile.filename + str(GS.serialize()) + '.pkl')
+        return GeneSelectorFile(cvfile.filename[:-4] + str(GS.serialize()) + '.pkl',GS.serialize(),passthrough)
 
-    def __init__(self,filename):
+    def __init__(self,filename,hashcode,passthrough=False):
 
+        self.passthrough = passthrough
+        self.hash = hashcode
         self.df = pd.read_pickle(filename)
 
     def select_genes(self,i):
@@ -57,7 +57,14 @@ class GeneSelectorFile:
         # print(idx)
         # print(idx.shape)
         # print(self.df.loc[idx].values.shape)
-        return (idx==1).values
+
+        if self.passthrough:
+
+            return self.df.index
+
+        else:
+
+            return (idx == 1).values
 
     def generate_file(dataset,cvfile,geneselector):
 
@@ -69,4 +76,4 @@ class GeneSelectorFile:
             df.loc[:,i] = 0
             df.loc[idkeep,i] = 1
 
-        df.to_pickle(cvfile.filename + str(Model.get_modelhash(geneselector.model)) + '.pkl')
+        df.to_pickle(cvfile.filename[:-4] + str(geneselector.model.get_modelhash()) + '.pkl')

@@ -23,3 +23,5 @@ CV_DICT_KF = {
     'RepeatedStratifiedKFold':['n_repeats']
 
 }
+
+no_proba_list = ['accuracy_score']
