@@ -100,11 +100,11 @@ KLR2_RBF = KernelLogisticRegression.KernelLogisticRegression(solver='liblinear',
 KLR2_RBF_CV = Model.Model(GridSearchCV(KLR2_RBF,KLR_RBF_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=False),'KLR2_RBF')
 
 KLR2_POL_Gdict = np.logspace(-6,-2.7,10)
-KLR2_POL_Degdict = [2,3,4,5,6,7,8]
+KLR2_POL_Degdict = [2,3,4,5,6]
 KLR2_POL_coef0dict = np.logspace(-5,2.2,15)
 KLR_POL_grid = {'C':LogisticRegression_Cdict,'gamma':KLR2_POL_Gdict,'coef0':KLR2_POL_coef0dict,'degree':KLR2_POL_Degdict}
 
-KLR2_POL = KernelLogisticRegression.KernelLogisticRegression(solver='liblinear',kernel='polynomial')
+KLR2_POL = KernelLogisticRegression.KernelLogisticRegression(solver='lbfgs',kernel='polynomial',max_iter=5000)
 KLR2_POL_CV = Model.Model(GridSearchCV(KLR2_POL,KLR_POL_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=False),'KLR2_POL')
 
 KLR2_SIG_coef0dict = np.logspace(2.5,5.6,10)

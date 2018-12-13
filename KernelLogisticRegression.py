@@ -27,7 +27,7 @@ from sklearn.utils.fixes import _joblib_parallel_args
 # from sklearn.externals import six
 # from sklearn.metrics import get_scorer
 
-from sklearn.linear_model.logistic import _check_solver,_check_multi_class
+from sklearn.linear_model.logistic import _check_solver,_check_multi_class,logistic_regression_path
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics.pairwise import pairwise_kernels
 
@@ -145,7 +145,7 @@ class KernelLogisticRegression(LogisticRegression):
         if warm_start_coef is None:
             warm_start_coef = [None] * n_classes
 
-        path_func = delayed(super.logistic_regression_path)
+        path_func = delayed(logistic_regression_path)
 
         # The SAG solver releases the GIL so it's more efficient to use
         # threads for this solver.
@@ -220,3 +220,22 @@ class KernelLogisticRegression(LogisticRegression):
             else:
                 decision_2d = decision
             return softmax(decision_2d, copy=False)
+
+    def predict(self, X):
+        """Predict class labels for samples in X.
+        Parameters
+        ----------
+        X : array_like or sparse matrix, shape (n_samples, n_features)
+            Samples.
+        Returns
+        -------
+        C : array, shape [n_samples]
+            Predicted class label per sample.
+        """
+        Xk = self._get_kernel(X,self.X_fit_)
+        scores = self.decision_function(Xk)
+        if len(scores.shape) == 1:
+            indices = (scores > 0).astype(np.int)
+        else:
+            indices = scores.argmax(axis=1)
+        return self.classes_[indices]
