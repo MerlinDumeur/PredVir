@@ -16,10 +16,12 @@ FILENAME_X = 'X.pkl'
 FILENAME_Y = 'Y.pkl'
 
 CV_DICT_KF = {
-    
+
     'KFold':['shuffle'],
     'RepeatedKFold':['n_repeats'],
     'StratifiedKFold':['shuffle'],
     'RepeatedStratifiedKFold':['n_repeats']
 
 }
+
+no_proba_list = ['accuracy_score']

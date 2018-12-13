@@ -3,18 +3,21 @@ import CV
 import zlib
 
 
-def get_modelhash(model):
+def process_cv(params):
 
-    params = model.get_params()
     ser_cv = CV.CV_FILE.serialize_CV(params['cv'])
-    ser_model = Model.serialize_model(params['estimator'])
-
-    # params['cv'] = params['cv'].__class__.__name__
-    
     for k,v in ser_cv.items():
-    
-        # print(k)
+
         params[k + '_cv'] = v
+
+    del params['cv']
+
+    return params
+
+
+def process_model(params):
+
+    ser_model = serialize_model(params['estimator'])
 
     for k,v in ser_model.items():
 
@@ -23,15 +26,43 @@ def get_modelhash(model):
     for k,v in params['param_grid'].items():
 
         # v.flags.writeable = False
-        params['param_grid'][k] = zlib.adler32(v.tobytes())
+        try:
+
+            params['param_grid'][k] = zlib.adler32(v.tobytes())
+
+        except AttributeError:
+
+            params['param_grid'][k] = v
+
         # v.flags.writeable = True
 
-    del params['cv']
+    if params['scoring'].__class__.__name__ == '_ProbaScorer':
+
+        params['scoring'] = params['scoring']._score_func.__name__
+
+    else:
+
+        raise(ValueError('Scoring method not supported'))
+    
     del params['estimator']
-    
-    # print(params)
-    
+
+    return params
+
+
+def process_kernel(params,kernel):
+
+    params.update(kernel.get_params())
+    return params
+
+
+def hash_model(params):
+
     return zlib.adler32(bytes(json.dumps(params, sort_keys=True),'utf-8'))
+
+
+def serialize_model(model):
+
+        return model.get_params()
 
 
 class Model:
@@ -41,11 +72,35 @@ class Model:
         self.model = model
         self.name = name
 
-    def serialize_model(model):
+    def __getattr__(self,*args,**kwargs):
 
-        # argsvalues = {{k:getattr(cv_instance,k) for k in ['random_state',*Constants.CV_DICT_KF[cv_instance.__class__.__name__]] if k != "n_splits"}}
-        # print(model.get_params())
-        return model.get_params()
+        return self.model.__getattribute__(*args,**kwargs)
+
+    def get_modelhash(self):
+
+        view = self.model.get_params()
+        params = {k:v for k,v in view.items()}
+        params = process_model(params)
+        params = process_cv(params)
+
+        return hash_model(params)
+
+
+class ModelKernel(Model):
+
+    def __init__(self,model,name,kernel):
+
+        Model.__init__(self,model,name)
+        self.kernel = kernel
+
+    def get_modelhash(self):
+
+        params = self.model.get_params()
+        params = process_kernel(params,self.kernel)
+        params = process_model(params)
+        params = process_cv(params)
+
+        return hash_model(params)
 
 # class ModelTester:
 
@@ -58,14 +113,14 @@ class Model:
 #     def test_score(self,X,Y,cv_primary,metrics={},strata=None,save=None):
 
 #         MI = pd.MultiIndex.from_arrays([['general'],['fs_size']])
-        
+
 #         arrays_m = [['Test'] * (len(metrics) + 1),['score',*metrics.keys()]]
 #         MI2 = pd.MultiIndex.from_arrays(arrays_m)
 
 #         param_grid = param[self.predictorCV.param_grid_name]
 #         arrays_p = [['Validation'] * (len(param_grid) + 1),['score',*param_grid]]
 #         MI3 = pd.MultiIndex.from_arrays(arrays_p)
-        
+
 #         MI_final = MI.copy()
 #         MI_final = MI_final.append(MI2)
 #         MI_final = MI_final.append(MI3)
@@ -91,7 +146,7 @@ class Model:
 #                 df_output.loc[i,'Test'] = score
 #             else:
 #                 df_output.loc[i,'Test'] = [score] + [metrics[m](Ytest,self.predictorCV.predict_proba(Xtest),labels=[0,1]) for m in arrays_m[1][1:]]
-            
+
 #             if len(best_params) == 0:
 #                 df_output.loc[i,'Validation'] = self.predictorCV.best_score()
 #             else:
