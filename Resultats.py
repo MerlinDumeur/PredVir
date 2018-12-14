@@ -1,28 +1,35 @@
+import Constants
+
 import pandas as pd
+from matplotlib import pyplot as plt
 
 
 class Resultats:
 
-    def __init__(self,ds,hash,results_dict):
+    def __init__(self,dataset):
 
-        try:
+        self.ds = dataset
 
-            self.df = Resultats.from_file(ds)
+    def generate_barplot(self,gs,modelsNames,metric,showStd=True):
 
-        except FileNotFoundError:
+        if isinstance(gs,int):
+            directory = self.ds.get_foldername() + Constants.FOLDERPATH_GS.format(hash=gs)
+        else:
+            directory = self.ds.get_foldername() + Constants.FOLDERPATH_GS.format(gs.hash)
 
-            self.df = create_df(hash,ds)
+        df_means = pd.read_pickle(directory + 'means.pkl')
+        df_vars = pd.read_pickle(directory + 'vars.pkl')
 
-    def from_file(ds):
+        MI = pd.MultiIndex.from_tuples(df_means.columns)
 
-        filename = ds.get_foldername() + '.pkl'
-        return pd.read_pickle(filename)
+        df_means = df_means.reindex(MI,axis=1)
+        df_vars = df_vars.reindex(MI,axis=1)
 
-    def create_df(ds,results_dict,hash):
+        L = df_means.loc[modelsNames,('Test',metric)]
+        X = range(len(L))
 
-        Index = 
-        return pd.DataFrame(index=*results_dict,)
-
-    def save_data(self,hash,results_dict):
-
-        Index = 
+        plt.bar(X,L)
+        plt.ylabel(metric)
+        plt.title(f'Gene selection #{gs if isinstance(gs,int) else gs.hash}')
+        plt.xticks(X,L.keys())
+        plt.show()

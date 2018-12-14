@@ -95,7 +95,7 @@ class KernelLogisticRegression(LogisticRegression):
         n_samples, n_features = X_k.shape
 
         multi_class = _check_multi_class(self.multi_class, solver,
-                                               len(self.classes_))
+                                         len(self.classes_))
 
         if solver == 'liblinear':
             if effective_n_jobs(self.n_jobs) != 1:
