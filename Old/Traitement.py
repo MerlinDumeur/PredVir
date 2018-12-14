@@ -115,7 +115,7 @@ def import_X(base,nmois=None,std=True):
 def import_index_fs(base,id,cv_primary,classifieur_fr,classifieur_fs,nmois=None,std=True):
 
     filename = ms.get_filename(cv_primary,id,nmois,std)
-    foldername = ms.get_foldername('FS',base,classifieur_fr,classifieur_fs)
+    foldername = ms.foldername('FS',base,classifieur_fr,classifieur_fs)
 
     df = pd.read_pickle(foldername + filename)
 
@@ -125,7 +125,7 @@ def import_index_fs(base,id,cv_primary,classifieur_fr,classifieur_fs,nmois=None,
 def import_index_cv(base,id,cv_primary,nmois=None,std=True):
 
     filename = ms.get_filename(cv_primary,id,nmois,std)
-    foldername = ms.get_foldername('CV_primary',base)
+    foldername = ms.foldername('CV_primary',base)
 
     df = pd.read_pickle(foldername + filename)
 

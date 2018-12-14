@@ -7,7 +7,8 @@ class Dataset:
     def __init__(self,base,nmois):
 
         self.base = base
-        self.X,self.Y = self.load_XY(base,nmois)
+        self.nmois = nmois
+        self.X,self.Y = self.load_XY()
 
     def CV_split(self,CV,strata=None):
 
@@ -23,14 +24,18 @@ class Dataset:
 
             yield(Xtrain,Ytrain,Xtest,Ytest)
 
-    def load_XY(self,base,nmois):
+    def load_XY(self):
 
-        self.folder = Dataset.get_foldername(base,nmois)
+        self.folder = Dataset.foldername(self.base,self.nmois)
         X = pd.read_pickle(self.folder + Constants.FILENAME_X)
         Y = pd.read_pickle(self.folder + Constants.FILENAME_Y)
 
         return X,Y
 
-    def get_foldername(base,nmois):
+    def get_foldername(self):
+
+        return Dataset.foldername(self.base,self.nmois)
+
+    def foldername(base,nmois):
 
         return Constants.FOLDERPATH.format(base=base,nmois=str(nmois) if nmois is not None else 'R')

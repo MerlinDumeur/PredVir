@@ -69,7 +69,7 @@ class Visualizer:
     def plotij(self,n,i,j,axe,X_fs,X_val,X_valr,Y_val,X_test,X_testr,Y_test,ACP,IndexMin,IndexMax,classifieur_model):
 
         grid = np.meshgrid(*[[self.coef] if k not in [i,j] else np.arange(IndexMin[k],IndexMax[k],self.taille_maille) for k in range(n)])
-            
+
         a = np.c_[tuple(g.ravel() for g in grid)]
         b = ACP.inverse_transform(a)
         df = pd.DataFrame(b,columns=X_val.columns)
@@ -80,15 +80,15 @@ class Visualizer:
 
         shape = grid[0].shape
         s = tuple(slice(None) if shape[k] != 1 else 0 for k in range(n))
-            
+
         axe.contourf(grid[i][s],grid[j][s],Z[s],cmap=self.cm,alpha=.8)
-            
+
         axe.scatter(X_valr[:,i],X_valr[:,j],c=Y_val,cmap=self.cm_bright,edgecolors='k',s=self.marker_size)
         axe.scatter(X_testr[:,i],X_testr[:,j],c=Y_test,cmap=self.cm_bright,edgecolors='k',alpha=0.6,s=self.marker_size)
-        
+
         axe.set_xlim(grid[i].min(),grid[i].max())
         axe.set_ylim(grid[j].min(),grid[j].max())
-            
+
         axe.set_xticks(())
         axe.set_yticks(())
 
@@ -105,7 +105,7 @@ class VisualizerBase(Visualizer):
         Visualizer.__init__(taille_maille,coef,cm=cm,cm_bright=cm_bright,marker_size=marker_size,figsize=figsize)
 
         std = kwargs.get('std',True)
-        
+
         self.X_fs,self.X_val,self.Y_val,self.X_test,self.Y_test = proc.import_val_test_XY_cv_fs(base,id,cv_primary,cv_i,nmois=nmois,std=std,classifieur_fr=classifieur_fr,classifieur_fs=classifieur_fs)
 
     def display_XY(self,n_dimension,classifieur_model):

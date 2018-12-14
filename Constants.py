@@ -15,6 +15,8 @@ FOLDERPATH = '{base}/{nmois}/'
 FILENAME_X = 'X.pkl'
 FILENAME_Y = 'Y.pkl'
 
+FOLDERPATH_GS = '{hash}/'
+
 CV_DICT_KF = {
 
     'KFold':['shuffle'],

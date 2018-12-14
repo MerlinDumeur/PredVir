@@ -58,7 +58,7 @@ class CV_FILE:
 
     def from_args(base,nmois,cv,cv_args):
 
-        foldername = Dataset.Dataset.get_foldername(base,nmois)
+        foldername = Dataset.Dataset.foldername(base,nmois)
         filename = CV_FILE.generate_filename_CV(cv,cv_args)
         return CV_FILE(foldername + filename + '.pkl')
 
@@ -85,7 +85,7 @@ class CV_FILE:
                 df.loc[:,i] = 0
                 df.iloc[train_index,i] = 1
 
-        df.to_pickle(Dataset.Dataset.get_foldername(dataset.base,nmois) + CV_FILE.generate_filename_CV(cv,cv_args) + '.pkl')
+        df.to_pickle(Dataset.Dataset.foldername(dataset.base,nmois) + CV_FILE.generate_filename_CV(cv,cv_args) + '.pkl')
 
     def generate_filename_CV(cv,cv_args):
 
