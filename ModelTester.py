@@ -13,24 +13,9 @@ class ModelTester:
 
         self.model = model
 
-    def test_score(self,ds,cv_primary,geneSelector,metrics={},strata=None,save=None,kernel=False):
+    def fit_procedure(self,ds,cv_primary,strata,geneSelector,X,Y):
 
-        X, Y = ds.X, ds.Y
-
-        MI = pd.MultiIndex.from_arrays([['general'],['fs_size']])
-
-        arrays_m = [['Test'] * (len(metrics) + 1),['score',*metrics]]
-        MI2 = pd.MultiIndex.from_arrays(arrays_m)
-
-        param_grid = self.model.param_grid
-        arrays_p = [['Validation'] * (len(param_grid) + 1),['score',*param_grid]]
-        MI3 = pd.MultiIndex.from_arrays(arrays_p)
-
-        MI_final = MI.copy()
-        MI_final = MI_final.append(MI2)
-        MI_final = MI_final.append(MI3)
-
-        df_output = pd.DataFrame(index=np.arange(cv_primary.get_n_splits()),columns=MI_final)
+        values_params = {k:[] for k in self.model.param_grid}
 
         for i,(Xtrain,Ytrain,Xtest,Ytest) in enumerate(ds.CV_split(cv_primary,strata)):
 
@@ -45,10 +30,57 @@ class ModelTester:
             Xtrain = Xtrain.loc[:,index_genes]
             Xtest = Xtest.loc[:,index_genes]
 
-            if kernel:
+            self.model.fit(Xtrain,Ytrain)
 
-                Xtest = self.model.kernel.compute(Xtrain,Xtest)
-                Xtrain = self.model.kernel.compute(Xtrain,Xtrain)
+            bp = self.model.best_params
+
+            for k,v in values_params.items():
+
+                v.append(bp[k])
+
+        return values_params
+
+    def test_score(self,ds,cv_primary,geneSelector,metrics={},strata=None,save=None,adaptative=False):
+
+        X, Y = ds.X, ds.Y
+
+        MI = pd.MultiIndex.from_arrays([['general'] * 2,['fs_size','Class']])
+
+        arrays_m = [['Test'] * (len(metrics) + 1),['score',*metrics]]
+        MI2 = pd.MultiIndex.from_arrays(arrays_m)
+
+        param_grid = self.model.param_grid
+        arrays_p = [['Validation'] * (len(param_grid) + 1),['score',*param_grid]]
+        MI3 = pd.MultiIndex.from_arrays(arrays_p)
+
+        MI_final = MI.copy()
+        MI_final = MI_final.append(MI2)
+        MI_final = MI_final.append(MI3)
+
+        df_output = pd.DataFrame(index=np.arange(cv_primary.get_n_splits()),columns=MI_final)
+
+        if adaptative:
+
+            i = 0
+            cont = True
+
+            while cont and i < self.model.n_iter_search:
+
+                values_params = self.fit_procedure(ds,cv_primary,strata,geneSelector,X,Y)
+                cont = self.model.update_intervals(values_params)
+
+        for i,(Xtrain,Ytrain,Xtest,Ytest) in enumerate(ds.CV_split(cv_primary,strata)):
+
+            if issubclass(geneSelector.__class__,GeneSelection.GeneSelector):
+
+                index_genes = geneSelector.select_genes(X,Y)
+
+            else:
+
+                index_genes = geneSelector.select_genes(i)
+
+            Xtrain = Xtrain.loc[:,index_genes]
+            Xtest = Xtest.loc[:,index_genes]
 
             self.model.fit(Xtrain,Ytrain)
 
@@ -56,6 +88,7 @@ class ModelTester:
             score = self.model.score(Xtest,Ytest)
 
             df_output.loc[i,'general'] = Xtrain.shape[1]
+            df_output.loc[i,'Class'] = self.model.best_estimator_.__class__.__name__
 
             if len(metrics) == 0:
                 df_output.loc[i,'Test'] = score
