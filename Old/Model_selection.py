@@ -53,7 +53,7 @@ CV_dict = {
 #     return results,msx_list
 
 
-def get_foldername(type,base,classifieur_fr=None,classifieur_fs=None,model=None,**kwargs):
+def foldername(type,base,classifieur_fr=None,classifieur_fs=None,model=None,**kwargs):
 
     filename1 = base + rf'/cv-sets/'
 
@@ -106,7 +106,7 @@ def generate_CV_sets(dataSet,replace=False):
             Index = [i in IndexTrain for i in X.index]
             df[i] = Index
 
-        foldername = get_foldername('CV_primary',dataSet.base)
+        foldername = foldername('CV_primary',dataSet.base)
         filename = dataSet.get_filename(id)
         df.to_pickle(foldername + filename)
 
@@ -139,7 +139,7 @@ class DataSet:
 
     def calc_stats(self,classifieur_fr,classifieur_fs,model):
 
-        DFlist = [pd.read_pickle(get_foldername('model_scoring',self.base,classifieur_fr,classifieur_fs,model) + self.get_filename(id)) for id in self.id_list]
+        DFlist = [pd.read_pickle(foldername('model_scoring',self.base,classifieur_fr,classifieur_fs,model) + self.get_filename(id)) for id in self.id_list]
 
         df = pd.concat(DFlist,axis=0,ignore_index=True)
 
@@ -191,7 +191,7 @@ class Model:
         MI3 = pd.MultiIndex.from_arrays(arrays_p)
         MI_final = MI_final.append(MI3)
 
-        foldername_cv,foldername_fs,foldername_scoring = get_foldername('all',dataSet.base,self.feature_selector.classifieur_fr,self.feature_selector.classifieur_fs,self.predictorCV)
+        foldername_cv,foldername_fs,foldername_scoring = foldername('all',dataSet.base,self.feature_selector.classifieur_fr,self.feature_selector.classifieur_fs,self.predictorCV)
 
         os.makedirs(os.path.dirname(foldername_scoring), exist_ok=True)
 
@@ -296,7 +296,7 @@ class FeatureSelector:
         replace = kwargs.get('replace',False)
         malus = kwargs.get('malus',0.05)
 
-        foldername_input,foldername_output = get_foldername('FS+CV',dataSet.base,self.classifieur_fr,self.classifieur_fs)
+        foldername_input,foldername_output = foldername('FS+CV',dataSet.base,self.classifieur_fr,self.classifieur_fs)
 
         graphs = {}
 
@@ -363,7 +363,7 @@ class FeatureSelector:
 
     def generate_fs2(self,dataSet,keep=1000):
 
-        foldername_input,foldername_output = get_foldername('FS+CV',dataSet.base,self.classifieur_fr,self.classifieur_fs)
+        foldername_input,foldername_output = foldername('FS+CV',dataSet.base,self.classifieur_fr,self.classifieur_fs)
 
         os.makedirs(os.path.dirname(foldername_output), exist_ok=True)
 
