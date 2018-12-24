@@ -48,7 +48,7 @@ class GeneSelectorFile:
     def __init__(self,filename,hashcode,passthrough=False):
 
         self.passthrough = passthrough
-        self.hash = hashcode
+        self.hash = 'PASSTHROUGH' if passthrough else hashcode
         self.df = pd.read_pickle(filename)
 
     def select_genes(self,i):

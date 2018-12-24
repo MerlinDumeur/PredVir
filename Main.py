@@ -6,6 +6,7 @@ import GeneSelection
 import ModelTester
 import Model
 import KernelLogisticRegression
+import Constants
 # import pickle
 
 import numpy as np
@@ -68,7 +69,7 @@ LogR1 = LogisticRegression(penalty='l1',solver='liblinear')
 LogR1_cv = GridSearchCV(LogR1,LR_grid,scoring=geneSelector_metric,cv=geneSelector_cv,n_jobs=-1,iid=False)
 LogR1_m = Model.Model(LogR1_cv,'LogR1')
 
-GS = GeneSelection.GeneSelector_GLM(LogR1_m)
+LogR1GS = GeneSelection.GeneSelector_GLM(LogR1_m)
 
 # print(zlib.compressobj(LogR1_cv))
 # print(zlib.adler32(LogR1_cv))
@@ -81,15 +82,15 @@ GS = GeneSelection.GeneSelector_GLM(LogR1_m)
 cvfile = CV.CV_FILE.from_args(base,nmois,cv_primary,cv_primary_args)
 
 # GeneSelection.GeneSelectorFile.generate_file(ds,cvfile,GS)
-gsfile = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,GS)
-
+LogR1GS_file = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,LogR1GS)
+GS_ps = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,LogR1GS,True)
 
 # On créée nos modèles
 
 LR_grid = {'C':LogisticRegression_Cdict}
 
 LR2 = LogisticRegression(solver='liblinear')
-LR2_CV = Model.Model(GridSearchCV(LR2,LR_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=False),'LR2')
+LR2_CV = Model.Model(GridSearchCV(LR2,LR_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=True),'LR2')
 LR2_m = Model.Model(LR2_CV,'LogR2')
 
 KLR_RBF_Gdict = np.logspace(-6,1,20)
@@ -97,55 +98,73 @@ KLR_RBF_Cdict = np.logspace(-1,1.2,10)
 KLR_RBF_grid = {'C':LogisticRegression_Cdict,'gamma':KLR_RBF_Gdict}
 
 KLR2_RBF = KernelLogisticRegression.KernelLogisticRegression(solver='liblinear',kernel='rbf')
-KLR2_RBF_CV = Model.Model(GridSearchCV(KLR2_RBF,KLR_RBF_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=False),'KLR2_RBF')
+KLR2_RBF_CV = Model.Model(GridSearchCV(KLR2_RBF,KLR_RBF_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=True),'KLR2_RBF')
 
 KLR2_POL_Gdict = np.logspace(-6,-2.7,10)
 KLR2_POL_Degdict = [2,3,4,5,6]
 KLR2_POL_coef0dict = np.logspace(-5,2.2,15)
 KLR_POL_grid = {'C':LogisticRegression_Cdict,'gamma':KLR2_POL_Gdict,'coef0':KLR2_POL_coef0dict,'degree':KLR2_POL_Degdict}
 
-KLR2_POL = KernelLogisticRegression.KernelLogisticRegression(solver='lbfgs',kernel='polynomial',max_iter=5000)
-KLR2_POL_CV = Model.Model(GridSearchCV(KLR2_POL,KLR_POL_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=False),'KLR2_POL')
+KLR2_POL = KernelLogisticRegression.KernelLogisticRegression(solver='liblinear',kernel='polynomial',max_iter=100)
+KLR2_POL_CV = Model.Model(GridSearchCV(KLR2_POL,KLR_POL_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=True),'KLR2_POL')
 
 KLR2_SIG_coef0dict = np.logspace(2.5,5.6,10)
 KLR2_SIG_grid = {'C':LogisticRegression_Cdict,'coef0':KLR2_SIG_coef0dict}
 
-KLR2_SIG = KernelLogisticRegression.KernelLogisticRegression(solver='liblinear',kernel='polynomial')
-KLR2_SIG_CV = Model.Model(GridSearchCV(KLR2_SIG,KLR2_SIG_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=False),'KLR2_SIG')
+KLR2_SIG = KernelLogisticRegression.KernelLogisticRegression(solver='liblinear',kernel='sigmoid')
+KLR2_SIG_CV = Model.Model(GridSearchCV(KLR2_SIG,KLR2_SIG_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=True),'KLR2_SIG')
 
-models_list = [LR2_CV,KLR2_RBF_CV,KLR2_POL_CV,KLR2_SIG_CV]
+XGB_maxdepth = [3,4,5]
+XGB_lr = np.logspace(-3,-0.5,5)
+XGB_nestimators = [10,100,300]
+XGB_grid = {"max_depth":XGB_maxdepth,"learning_rate":XGB_lr,"n_estimators":XGB_nestimators}
+
+XGB = XGBClassifier()
+XGB_CV = Model.Model(GridSearchCV(XGB,XGB_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=True),'XGB')
+
+gs_list = [GS_ps]
+models_list = [KLR2_RBF_CV,KLR2_SIG_CV,XGB_CV]
 
 # On teste les performances de nos modeles
 
 perf_dict = {}
 # metrics = {'log_loss':log_loss,'AUC':roc_auc_score}
 metrics = {'log_loss':log_loss,'AUC':roc_auc_score,'accuracy':accuracy_score}
-df_means = pd.DataFrame()
 
-directory = f'{base}/{nmois}/{gsfile.hash}/'
+for gsfile in gs_list:
 
-if not os.path.exists(directory):
-    os.makedirs(directory)
+    directory = ds.get_foldername() + Constants.FOLDERPATH_GS.format(hash=gsfile.hash)
 
-replace = True
+    filename_means = directory + 'means.pkl'
+    filename_vars = directory + 'vars.pkl'
 
-for model in models_list:
+    df_means = pd.DataFrame() if not(os.path.exists(filename_means)) else pd.read_pickle(filename_means)
+    df_vars = pd.DataFrame() if not(os.path.exists(filename_vars)) else pd.read_pickle(filename_vars)
 
-    filename = directory + f'{model.name}.pkl'
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
-    if not(os.path.exists(filename)) or replace:
+    replace = True
 
-        print(f"Currently testing {model.name}")
-        MT = ModelTester.ModelTester(model)
-        perf_dict[model.name] = MT.test_score(ds,cvfile,gsfile,metrics=metrics,save=rf'{model.name}-perf.pkl')
-        perf_dict[model.name].to_pickle(filename)
-        df_means = df_means.append(perf_dict[model.name].mean(),ignore_index=True)
+    for model in models_list:
 
-# for n,df in perf_dict.items():
+        filename = directory + f'{model.name}.pkl'
 
-#     df.to_pickle(f'{base}/{nmois}/{gsfile.serialize()}/{n}.pkl')
+        if not(os.path.exists(filename)) or replace:
 
-df_means.to_pickle(f'{base}/{nmois}/{gsfile.hash}/means.pkl')
+            print(f"Currently testing {model.name}")
+            MT = ModelTester.ModelTester(model)
+            perf_dict[model.name] = MT.test_score(ds,cvfile,gsfile,metrics=metrics)
+            perf_dict[model.name].to_pickle(filename)
+            df_means.loc[model.name,:] = perf_dict[model.name].mean()
+            df_vars.loc[model.name,:] = perf_dict[model.name].var()
+
+    # for n,df in perf_dict.items():
+
+    #     df.to_pickle(f'{base}/{nmois}/{gsfile.serialize()}/{n}.pkl')
+
+    df_means.to_pickle(filename_means)
+    df_vars.to_pickle(filename_vars)
 
 # with open('df.pkl','wb') as handle:
 #     pickle.dump(perf_dict,handle,protocol=pickle.HIGHEST_PROTOCOL)
