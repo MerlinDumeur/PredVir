@@ -1,7 +1,20 @@
-from sklearn.model_selection import BaseSearchCV, ParameterGrid
+import warnings
+import time
+
+import BaseSearchCV
+from sklearn.model_selection import ParameterGrid,check_cv
+from sklearn.base import is_classifier,clone
+from sklearn.metrics.scorer import _check_multimetric_scoring
+from sklearn.externals import six
+from sklearn.utils.validation import indexable
+from sklearn.externals.joblib import Parallel,delayed
+# from sklearn.model_selection import _fit_and_score
+from validation import _fit_and_score
+
+from itertools import product
 
 
-class SequentialGridSearchCV(BaseSearchCV):
+class SequentialGridSearchCV(BaseSearchCV.BaseSearchCV):
 
     def __init__(self, estimator, seq_param_grid, scoring=None, fit_params=None,
                  n_jobs=None, iid='warn', refit=True, cv='warn', verbose=0,
@@ -13,10 +26,177 @@ class SequentialGridSearchCV(BaseSearchCV):
                          pre_dispatch=pre_dispatch, error_score=error_score,
                          return_train_score=return_train_score)
 
-        self.seq_param_grid = seq_param_grid
+        self.param_grid = seq_param_grid
 
-    def _run_search(self,evaluate_candidates):
+    def _run_search(self,evaluate_candidates,parameter_grid):
 
-        for param_grid in self.seq_param_grid:
+        evaluate_candidates(ParameterGrid(parameter_grid))
 
-            evaluate_candidates(ParameterGrid(param_grid))
+    def search_on_grid(self,X,y,groups,fit_params,scorers,base_estimator,parameter_grid):
+
+        X, y, groups = indexable(X, y, groups)
+
+        estimator = self.estimator
+        cv = check_cv(self.cv, y, classifier=is_classifier(estimator))
+        n_splits = cv.get_n_splits(X, y, groups)
+        self.n_splits_ = n_splits
+
+        parallel = Parallel(n_jobs=self.n_jobs, verbose=self.verbose,
+                            pre_dispatch=self.pre_dispatch)
+
+        fit_and_score_kwargs = dict(scorer=scorers,
+                                    fit_params=fit_params,
+                                    return_train_score=self.return_train_score,
+                                    return_n_test_samples=True,
+                                    return_times=True,
+                                    return_parameters=False,
+                                    error_score=self.error_score,
+                                    verbose=self.verbose)
+        results_container = [{}]
+
+        # print(groups)
+        # print(X)
+        # print(y)
+
+        with parallel:
+            all_candidate_params = []
+            all_out = []
+
+            def evaluate_candidates(candidate_params):
+                candidate_params = list(candidate_params)
+                n_candidates = len(candidate_params)
+
+                if self.verbose > 0:
+                    print("Fitting {0} folds for each of {1} candidates,"
+                          " totalling {2} fits".format(
+                              n_splits, n_candidates, n_candidates * n_splits))
+
+                out = parallel(delayed(_fit_and_score)(clone(base_estimator),
+                                                       X, y,
+                                                       train=train, test=test,
+                                                       parameters=parameters,
+                                                       **fit_and_score_kwargs)
+                               for parameters, (train, test)
+                               in product(candidate_params,
+                                          cv.split(X, y, groups)))
+
+                all_candidate_params.extend(candidate_params)
+                all_out.extend(out)
+
+                # XXX: When we drop Python 2 support, we can use nonlocal
+                # instead of results_container
+                results_container[0] = self._format_results(
+                    all_candidate_params, scorers, n_splits, all_out)
+                return results_container[0]
+
+            self._run_search(evaluate_candidates,parameter_grid)
+
+        return results_container[0]
+
+    def fit(self, X, y=None, groups=None, **fit_params):
+        # fit_params = {}
+        # print("fit is being called")
+        """Run fit with all sets of parameters.
+        Parameters
+        ----------
+        X : array-like, shape = [n_samples, n_features]
+            Training vector, where n_samples is the number of samples and
+            n_features is the number of features.
+        y : array-like, shape = [n_samples] or [n_samples, n_output], optional
+            Target relative to X for classification or regression;
+            None for unsupervised learning.
+        groups : array-like, with shape (n_samples,), optional
+            Group labels for the samples used while splitting the dataset into
+            train/test set.
+        **fit_params : dict of string -> object
+            Parameters passed to the ``fit`` method of the estimator
+        """
+
+        if self.fit_params is not None:
+            warnings.warn('"fit_params" as a constructor argument was '
+                          'deprecated in version 0.19 and will be removed '
+                          'in version 0.21. Pass fit parameters to the '
+                          '"fit" method instead.', DeprecationWarning)
+            if fit_params:
+                warnings.warn('Ignoring fit_params passed as a constructor '
+                              'argument in favor of keyword arguments to '
+                              'the "fit" method.', RuntimeWarning)
+            else:
+                fit_params = self.fit_params
+        # cv = check_cv(self.cv, y, classifier=is_classifier(estimator))
+
+        scorers, self.multimetric_ = _check_multimetric_scoring(
+            self.estimator, scoring=self.scoring)
+
+        if self.multimetric_:
+            if self.refit is not False and (
+                    not isinstance(self.refit, six.string_types) or
+                    # This will work for both dict / list (tuple)
+                    self.refit not in scorers):
+                raise ValueError("For multi-metric scoring, the parameter "
+                                 "refit must be set to a scorer key "
+                                 "to refit an estimator with the best "
+                                 "parameter setting on the whole data and "
+                                 "make the best_* attributes "
+                                 "available for that metric. If this is not "
+                                 "needed, refit should be set to False "
+                                 "explicitly. %r was passed." % self.refit)
+            else:
+                refit_metric = self.refit
+        else:
+            refit_metric = 'score'
+
+        # results = results_container[0]
+
+        for pg in self.param_grid:
+
+            base_estimator = clone(self.estimator)
+            results = self.search_on_grid(X,y,groups,fit_params,scorers,base_estimator,pg)
+
+            # print(results['parameters'])
+
+            # For multi-metric evaluation, store the best_index_, best_params_ and
+            # best_score_ iff refit is one of the scorer names
+            # In single metric evaluation, refit_metric is "score"
+            if self.refit or not self.multimetric_:
+                self.best_index_ = results["rank_test_%s" % refit_metric].argmin()
+                # self.best_params_ = results["params"][self.best_index_]
+
+                # print(self.best_params_)
+                self.update_best_params(results["params"][self.best_index_])
+                # print(self.best_params_)
+                # print(results["params"][self.best_index_])
+                # print(self.best_params_)
+
+                self.best_score_ = results["mean_test_%s" % refit_metric][
+                    self.best_index_]
+
+            if self.refit:
+                self.best_estimator_ = clone(base_estimator).set_params(
+                    **self.best_params_)
+                refit_start_time = time.time()
+                if y is not None:
+                    self.best_estimator_.fit(X, y, **fit_params)
+                else:
+                    self.best_estimator_.fit(X, **fit_params)
+                refit_end_time = time.time()
+                self.refit_time_ = refit_end_time - refit_start_time
+
+            # Store the only scorer not as a dict for single metric evaluation
+            self.scorer_ = scorers if self.multimetric_ else scorers['score']
+
+            self.cv_results_ = results
+
+        return self
+
+    def update_best_params(self,new_best_params):
+
+        try:
+            self.best_params_
+        except AttributeError:
+            self.best_params_ = new_best_params
+        else:
+
+            for k,v in new_best_params.items():
+
+                self.best_params_[k] = v

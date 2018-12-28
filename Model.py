@@ -3,6 +3,26 @@ import CV
 import zlib
 
 
+def serialize_param_grid(param_grid):
+
+    if isinstance(param_grid,list):
+
+        zlib.adler32([serialize_param_grid(g) for g in param_grid].tobytes())
+
+    for k,v in param_grid.items():
+
+        # v.flags.writeable = False
+        try:
+
+            param_grid[k] = zlib.adler32(v.tobytes())
+
+        except AttributeError:
+
+            param_grid[k] = v
+
+    return param_grid
+
+
 def process_cv(params):
 
     ser_cv = CV.CV_FILE.serialize_CV(params['cv'])
@@ -23,18 +43,7 @@ def process_model(params):
 
         params[k + '_model'] = v
 
-    for k,v in params['param_grid'].items():
-
-        # v.flags.writeable = False
-        try:
-
-            params['param_grid'][k] = zlib.adler32(v.tobytes())
-
-        except AttributeError:
-
-            params['param_grid'][k] = v
-
-        # v.flags.writeable = True
+    params['param_grid'] = serialize_param_grid(params['param_grid'])
 
     if params['scoring'].__class__.__name__ == '_ProbaScorer':
 

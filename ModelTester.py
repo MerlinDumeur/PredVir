@@ -5,6 +5,29 @@ import pandas as pd
 import numpy as np
 
 
+def _flatten_grid(param_grid):
+
+    if isinstance(param_grid,list):
+
+        out = {}
+
+        for g in param_grid:
+
+            for k,v in _flatten_grid(g).items():
+
+                if not(k in out):
+
+                    out[k] = [*v]
+
+                out[k].extend([*v])
+
+        return out
+
+    else:
+
+        return param_grid
+
+
 class ModelTester:
 
     def __init__(self,model):
@@ -50,7 +73,9 @@ class ModelTester:
         MI2 = pd.MultiIndex.from_arrays(arrays_m)
 
         param_grid = self.model.param_grid
-        arrays_p = [['Validation'] * (len(param_grid) + 1),['score',*param_grid]]
+        # print(*_flatten_grid(param_grid))
+        flattened_grid = _flatten_grid(param_grid)
+        arrays_p = [['Validation'] * (len(flattened_grid) + 1),['score',*flattened_grid]]
         MI3 = pd.MultiIndex.from_arrays(arrays_p)
 
         MI_final = MI.copy()
@@ -97,6 +122,8 @@ class ModelTester:
                 # print(self.model.predict_proba(Xtest).shape)
                 # print(metrics['accuracy'](Ytest,self.model.predict(Xtest)))
                 df_output.loc[i,'Test'] = [score] + [metrics[m](Ytest,self.model.predict_proba(Xtest)[:,1]) if metrics[m].__name__ not in Constants.no_proba_list else metrics[m](Ytest,self.model.predict(Xtest)) for m in arrays_m[1][1:]]
+
+            # print(best_params)
 
             if len(best_params) == 0:
                 df_output.loc[i,'Validation'] = self.model.best_score_

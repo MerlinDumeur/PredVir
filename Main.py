@@ -7,6 +7,8 @@ import ModelTester
 import Model
 import KernelLogisticRegression
 import Constants
+# import AdaptativeSearchCV
+import SequentialGridSearchCV
 # import pickle
 
 import numpy as np
@@ -83,6 +85,7 @@ cvfile = CV.CV_FILE.from_args(base,nmois,cv_primary,cv_primary_args)
 
 # GeneSelection.GeneSelectorFile.generate_file(ds,cvfile,GS)
 LogR1GS_file = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,LogR1GS)
+GS = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,LogR1GS)
 GS_ps = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,LogR1GS,True)
 
 # On créée nos modèles
@@ -114,16 +117,21 @@ KLR2_SIG_grid = {'C':LogisticRegression_Cdict,'coef0':KLR2_SIG_coef0dict}
 KLR2_SIG = KernelLogisticRegression.KernelLogisticRegression(solver='liblinear',kernel='sigmoid')
 KLR2_SIG_CV = Model.Model(GridSearchCV(KLR2_SIG,KLR2_SIG_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=True),'KLR2_SIG')
 
-XGB_maxdepth = [3,4,5]
-XGB_lr = np.logspace(-3,-0.5,5)
-XGB_nestimators = [10,100,300]
-XGB_grid = {"max_depth":XGB_maxdepth,"learning_rate":XGB_lr,"n_estimators":XGB_nestimators}
+XGB_maxdepth = [2,3,4]
+XGB_lr = np.logspace(-2,0,5)
+XGB_nestimators = [10,100]
+XGB_alpha = np.logspace(-3,0,5)
+XGB_beta = np.logspace(-3,0,5)
+
+XGB_grid1 = {"alpha":XGB_alpha,"beta":XGB_beta}
+XGB_grid2 = {"max_depth":XGB_maxdepth,"learning_rate":XGB_lr,"n_estimators":XGB_nestimators}
+XGB_seq_grid = [XGB_grid1,XGB_grid2]
 
 XGB = XGBClassifier()
-XGB_CV = Model.Model(GridSearchCV(XGB,XGB_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=True),'XGB')
+XGB_CV = Model.Model(SequentialGridSearchCV.SequentialGridSearchCV(XGB,XGB_seq_grid,scoring=modelscv_scoring,cv=models_cv,n_jobs=-1,iid=True),'XGB')
 
 gs_list = [GS_ps]
-models_list = [KLR2_RBF_CV,KLR2_SIG_CV,XGB_CV]
+models_list = [XGB_CV]
 
 # On teste les performances de nos modeles
 
