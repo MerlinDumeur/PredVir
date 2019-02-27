@@ -1,4 +1,4 @@
-# import Constants
+import Constants
 # import Preprocessing
 import Dataset
 import CV
@@ -6,9 +6,8 @@ import GeneSelection
 import ModelTester
 import Model
 import KernelLogisticRegression
-import Constants
 # import AdaptativeSearchCV
-import SequentialGridSearchCV
+# import SequentialGridSearchCV
 # import pickle
 
 import numpy as np
@@ -21,7 +20,7 @@ from xgboost import XGBClassifier
 import os
 # from sklearn.metrics.pairwise import rbf_kernel
 
-base = "epilung2"
+base = "epilung_toy"
 
 # On traite les données brutes pour l'apprentissage
 
@@ -37,15 +36,15 @@ base = "epilung2"
 
 # Pr.load_files(keep_XpG=keep_XpG,rename_XpG=rename_XpG,dropna_XpG=dropna_XpG,transpose_Trscr=True,keep_Plt=keep_Plt,rename_Plt=rename_Plt,dtype_Plt=dtype_Plt,remove_ctrl_Plt=True)
 
-# nmlist = [None,6,12,60]
+# nmlist = [12]
 
-# Pr.generate_XY(nmonths_list=nmlist,standardize=False)
+# Pr.generate_toyDataset(nmonths_list=nmlist,size_data=150,size_var=300,standardize=False)
 
 # On choisit les paramètres avec lesquels on travaille
 
-seed = 45
+seed = 42
 
-nmois = 60
+nmois = 12
 ds = Dataset.Dataset(base,nmois)
 
 cv = KFold
@@ -59,11 +58,8 @@ geneSelector_cv = cv(**cv_args)
 modelscv_scoring = make_scorer(log_loss,greater_is_better=False,needs_proba=True,labels=[0,1])
 models_cv = cv(**cv_args)
 
-# cv_primary = RepeatedKFold
-# cv_primary_args = {'n_splits':5,'n_repeats':5}
-
-cv_primary = KFold
-cv_primary_args = {'n_splits':5,'random_state':seed}
+cv_primary = RepeatedKFold
+cv_primary_args = {'n_splits':5,'n_repeats':5}
 
 # On cree le gene selector
 
@@ -80,7 +76,7 @@ LogR2_m = Model.Model(LogR2_CV,'LogR2')
 
 LogR1GS = GeneSelection.GeneSelector_GLM(LogR1_m)
 
-PGS = GeneSelection.GeneSelector_Participative(model_fr=LogR1_m,model_fs=LogR2_m,cv_fr=RepeatedStratifiedKFold(n_splits=5,n_repeats=3,random_state=seed),cv_fs=geneSelector_cv,metric_fs=log_loss)
+PGS = GeneSelection.GeneSelector_Participative(model_fr=LogR1_m,model_fs=LogR2_m,cv_fr=RepeatedStratifiedKFold(n_splits=5,n_repeats=20,random_state=seed),cv_fs=geneSelector_cv,metric_fs=log_loss)
 
 # print(zlib.compressobj(LogR1_cv))
 # print(zlib.adler32(LogR1_cv))
@@ -89,19 +85,16 @@ PGS = GeneSelection.GeneSelector_Participative(model_fr=LogR1_m,model_fs=LogR2_m
 
 # On genere les fichiers CV et Geneselction
 
-# CV.CV_FILE.generate_file(ds,nmois,cv_primary,cv_primary_args,strata=ds.Y)
+CV.CV_FILE.generate_file(ds,nmois,cv_primary,cv_primary_args,strata=ds.Y)
 cvfile = CV.CV_FILE.from_args(base,nmois,cv_primary,cv_primary_args)
 
-
-# GeneSelection.GeneSelectorFile.generate_file(ds,cvfile,PGS,weight_name='coef_',grid=np.linspace(0.1,0.5,20),savename='AVG_file.pkl')
-print("Generated PGS file")
+# GeneSelection.GeneSelectorFile.generate_file(ds,cvfile,PGS,weight_name='coef_',grid = np.linspace(0.05,0.95,98),savename='AVG_file.pkl')
+PGS = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,PGS)
 
 # GeneSelection.GeneSelectorFile.generate_file(ds,cvfile,LogR1GS)
-print("Generated LogR1GS file")
-
-PGS = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,PGS)
-GS = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,LogR1GS)
-GS_ps = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,LogR1GS,True)
+# GS = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,LogR1GS)
+# LogR1GS_file = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,LogR1GS)
+# GS_ps = GeneSelection.GeneSelectorFile.from_CVFILE(cvfile,LogR1GS,True)
 
 # On créée nos modèles
 
@@ -152,9 +145,9 @@ XGB_CV = Model.Model(GridSearchCV(XGB,XGB_grid,scoring='neg_log_loss',cv=models_
 
 XGB2_CV = Model.Model(GridSearchCV(XGBClassifier(n_jobs=4),{},scoring=modelscv_scoring,cv=models_cv,n_jobs=1,iid=True),'XGB_noparam')
 
-# gs_list = []
-gs_list = [PGS,GS_ps,GS]
-models_list = [LR2_CV,KLR2_RBF_CV,KLR2_SIG_CV,XGB_CV,XGB2_CV]
+gs_list = [PGS]
+gs_list = []
+models_list = [LR2_CV]
 
 
 # On teste les performances de nos modeles
@@ -164,8 +157,6 @@ perf_dict = {}
 metrics = {'log_loss':log_loss,'AUC':roc_auc_score,'accuracy':accuracy_score}
 
 for gsfile in gs_list:
-
-    print(f'Starting gsfile')
 
     directory = ds.get_foldername() + Constants.FOLDERPATH_GS.format(hash=gsfile.hash)
 

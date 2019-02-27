@@ -6,6 +6,7 @@ OS = "Overall survival"
 EFS = "Event Free Survival"
 PATHOLOGY = "pathology"
 DEAD = "dead"
+RELAPSED = "relapsed"
 
 XPG_FILEPATH = '/exp_grp.csv'
 DATA_FILEPATH = '/data.csv'

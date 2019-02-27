@@ -49,6 +49,10 @@ def process_model(params):
 
         params['scoring'] = params['scoring']._score_func.__name__
 
+    elif isinstance(params["scoring"],str):
+
+        pass
+
     else:
 
         raise(ValueError('Scoring method not supported'))

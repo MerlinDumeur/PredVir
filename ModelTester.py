@@ -4,6 +4,8 @@ import Constants
 import pandas as pd
 import numpy as np
 
+from itertools import islice
+
 
 def _flatten_grid(param_grid):
 
@@ -63,7 +65,7 @@ class ModelTester:
 
         return values_params
 
-    def test_score(self,ds,cv_primary,geneSelector,metrics={},strata=None,save=None,adaptative=False):
+    def test_score(self,ds,cv_primary,geneSelector,metrics={},strata=None,save=None,adaptative=False,resume=False,save_pred=True):
 
         X, Y = ds.X, ds.Y
 
@@ -82,7 +84,11 @@ class ModelTester:
         MI_final = MI_final.append(MI2)
         MI_final = MI_final.append(MI3)
 
-        df_output = pd.DataFrame(index=np.arange(cv_primary.get_n_splits()),columns=MI_final)
+        df_output = pd.read_pickle(save) if resume else pd.DataFrame(index=np.arange(cv_primary.get_n_splits()),columns=MI_final)
+
+        if save_pred:
+
+            df_pred = pd.DataFrame(index=X.index,columns=np.arange(cv_primary.get_n_splits()))
 
         if adaptative:
 
@@ -94,18 +100,26 @@ class ModelTester:
                 values_params = self.fit_procedure(ds,cv_primary,strata,geneSelector,X,Y)
                 cont = self.model.update_intervals(values_params)
 
-        for i,(Xtrain,Ytrain,Xtest,Ytest) in enumerate(ds.CV_split(cv_primary,strata)):
+        i_start = df_output.dropna().index.shape[0] if resume else 0
 
-            if issubclass(geneSelector.__class__,GeneSelection.GeneSelector):
+        for i,(Xtrain,Ytrain,Xtest,Ytest) in islice(enumerate(ds.CV_split(cv_primary,strata)),i_start,None):
 
-                index_genes = geneSelector.select_genes(X,Y)
+            if not(geneSelector.returns_index()):
+
+                Xtrain,Xtest = geneSelector.generate_variables(Xtrain,Xtest)
 
             else:
 
-                index_genes = geneSelector.select_genes(i)
+                if issubclass(geneSelector.__class__,GeneSelection.GeneSelector):
 
-            Xtrain = Xtrain.loc[:,index_genes]
-            Xtest = Xtest.loc[:,index_genes]
+                    index_genes = geneSelector.select_genes(X,Y)
+
+                else:
+
+                    index_genes = geneSelector.select_genes(i)
+
+                Xtrain = Xtrain.loc[:,index_genes]
+                Xtest = Xtest.loc[:,index_genes]
 
             self.model.fit(Xtrain,Ytrain)
 
@@ -130,8 +144,18 @@ class ModelTester:
             else:
                 df_output.loc[i,'Validation'] = [self.model.best_score_] + [best_params[k] for k in arrays_p[1][1:]]
 
-        if save is not None:
+            if save is not None:
 
-            df_output.to_pickle(save)
+                df_output.to_pickle(save)
 
-        return df_output
+            if save_pred:
+                
+                df_pred.loc[Ytest.index,i] = self.model.predict_proba(Xtest)[:,1]
+
+        if save_pred:
+
+            return df_output,df_pred
+
+        else:
+
+            return df_output

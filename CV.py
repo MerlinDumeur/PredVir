@@ -12,11 +12,17 @@ class CV:
         self.cv = cv
         self.cv_args = cv_args
 
-    def split(self,X):
+    def split(self,X,*args,**kwargs):
 
         cv = self.cv(**self.cv_args)
 
         return cv.split(X)
+
+    def __getattr__(self,*args,**kwargs):
+  
+        cv = self.cv(**self.cv_args)
+
+        return cv.__getattribute__(*args,**kwargs)
 
 
 type_dict = {
